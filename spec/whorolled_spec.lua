@@ -320,7 +320,7 @@ describe("options panel", function()
   local ns, env
   before_each(function() ns, env = H.load() end)
 
-  -- checkboxes in creation order: attach, expanded, auto, api, chat, debug
+  -- checkboxes in creation order: attach, auto, api, chat, debug
   local function boxes() return H.widgets("UICheckButtonTemplate") end
   local function click(cb, checked)
     cb:SetChecked(checked)
@@ -349,11 +349,10 @@ describe("options panel", function()
     env.WhoRolledDB.settings.source = "chat"
     ns.OpenOptions()
     local b = boxes()
-    assert.are.equal(6, #b)
+    assert.are.equal(5, #b)
     assert.is_false(b[1]:GetChecked())
     assert.is_false(b[2]:GetChecked())
-    assert.is_false(b[3]:GetChecked())
-    assert.is_true(b[5]:GetChecked())
+    assert.is_true(b[4]:GetChecked())
   end)
 
   it("changes settings from the checkboxes", function()
@@ -361,12 +360,10 @@ describe("options panel", function()
     local b = boxes()
     click(b[1], false)
     assert.is_false(env.WhoRolledDB.settings.attach)
-    click(b[2], true)
-    assert.is_true(env.WhoRolledDB.settings.expanded)
-    click(b[4], true)
+    click(b[3], true)
     assert.are.equal("api", env.WhoRolledDB.settings.source)
-    assert.is_false(b[3]:GetChecked()) -- radio behaviour
-    click(b[6], true)
+    assert.is_false(b[2]:GetChecked()) -- radio behaviour
+    click(b[5], true)
     assert.is_true(env.WhoRolledDB.settings.debug)
   end)
 
@@ -476,20 +473,106 @@ describe("roll panel", function()
     assert.matches("+12", p.rows[25].name:GetText(), 1, true)
   end)
 
-  it("follows the 'expanded by default' setting, per new roll", function()
-    env.WhoRolledDB.settings.expanded = true
-    local p, d = panelFor(60, 3)
-    assert.is_true(p.expanded)
+  it("starts collapsed again for a new roll in the same frame", function()
+    local p = panelFor(60, 3)
     click(p)
-    ns.FillPanel(p, d) -- same roll updated: stays as the player left it
-    assert.is_false(p.expanded)
-    ns.FillPanel(p, ns.RC:NewDrop("other", LINK)) -- next roll: default again
     assert.is_true(p.expanded)
+    ns.FillPanel(p, p.drop) -- same roll updated: stays as the player left it
+    assert.is_true(p.expanded)
+    ns.FillPanel(p, ns.RC:NewDrop("other", LINK))
+    assert.is_false(p.expanded)
   end)
 
   it("runs test rolls with the panels", function()
     env.SlashCmdList.WHOROLLED("test 2")
     H.runTimers()
     assert.are.equal(2, #env.WhoRolledDB.history)
+  end)
+end)
+
+describe("counts on the roll buttons", function()
+  local ns, env
+  before_each(function() ns, env = H.load() end)
+
+  local function badge(btn) return ns.badges[btn]:GetText() end
+
+  it("counts each choice on the test roll's buttons", function()
+    env.SlashCmdList.WHOROLLED("test")
+    H.runTimers() -- roll 1: Arwyn pass, Brogar pass, Célia need, Dorn greed
+    local f = ns.testFrames[1]
+    local need, greed, pass = f.buttons[1], f.buttons[2], f.buttons[3]
+    assert.are.equal("1", badge(need))
+    assert.are.equal("1", badge(greed))
+    assert.are.equal("2", badge(pass))
+    ns.TestChoose(f, "need")
+    assert.are.equal("2", badge(need))
+  end)
+
+  it("lists who made a choice while its button is hovered", function()
+    env.SlashCmdList.WHOROLLED("test")
+    H.runTimers()
+    local f = ns.testFrames[1]
+    local pass = f.buttons[3]
+    pass._scripts.OnEnter(pass)
+    local p
+    for _, c in ipairs(H.created) do
+      if c.kind == "Button" and c.frame._parent == f and c.frame.rows then p = c.frame end
+    end
+    assert.is_truthy(p)
+    assert.is_true(p:IsShown())
+    assert.are.equal(3, p.shownEntries) -- header + Arwyn + Brogar
+    assert.matches("Passer", p.rows[1].name:GetText(), 1, true)
+    pass._scripts.OnLeave(pass)
+    assert.is_false(p:IsShown())
+  end)
+
+  it("says nobody for a choice no one made", function()
+    env.SlashCmdList.WHOROLLED("test 3")
+    H.runTimers() -- roll 3: everyone passes
+    local f = ns.testFrames[3]
+    local need = f.buttons[1]
+    need._scripts.OnEnter(need)
+    assert.are.equal("", badge(need))
+  end)
+
+  it("puts counts on the game's roll frame buttons (Classic-style globals)", function()
+    local frame = env.CreateFrame("Frame", "GroupLootFrame1")
+    frame.rollID = 7
+    env.GroupLootFrame1RollButton = env.CreateFrame("Button", "GroupLootFrame1RollButton", frame)
+    env.GroupLootFrame1GreedButton = env.CreateFrame("Button", "GroupLootFrame1GreedButton", frame)
+    env.GroupLootFrame1PassButton = env.CreateFrame("Button", "GroupLootFrame1PassButton", frame)
+    frame.GetName = function() return "GroupLootFrame1" end
+    env.GetLootRollItemLink = function() return LINK end
+    H.fire("START_LOOT_ROLL", 7, 60)
+    env.WhoRolledDB.settings.source = "chat"
+    H.fire("CHAT_MSG_LOOT", "Zed a passé pour : " .. LINK)
+    H.fire("CHAT_MSG_LOOT", "Niwok a choisi Besoin pour : " .. LINK)
+    assert.are.equal("1", badge(env.GroupLootFrame1RollButton))
+    assert.are.equal("1", badge(env.GroupLootFrame1PassButton))
+    assert.are.equal("", badge(env.GroupLootFrame1GreedButton))
+  end)
+
+  it("falls back to the summary panel on a roll frame without known buttons", function()
+    local frame = env.CreateFrame("Frame", "GroupLootFrame1")
+    frame.rollID = 7
+    env.GetLootRollItemLink = function() return LINK end
+    H.fire("START_LOOT_ROLL", 7, 60)
+    env.WhoRolledDB.settings.source = "chat"
+    H.fire("CHAT_MSG_LOOT", "Zed a passé pour : " .. LINK)
+    local p
+    for _, c in ipairs(H.created) do
+      if c.frame._parent == frame and c.frame.summary then p = c.frame end
+    end
+    assert.is_truthy(p)
+    assert.is_true(p:IsShown())
+    assert.matches(ns.STATE_ICON.pass .. " 1", p.summary[1]:GetText(), 1, true)
+  end)
+
+  it("hides the counts when turned off", function()
+    env.SlashCmdList.WHOROLLED("test")
+    H.runTimers()
+    env.SlashCmdList.WHOROLLED("attach")
+    ns.OnDropChanged(ns.testFrames[1].drop)
+    assert.are.equal("", badge(ns.testFrames[1].buttons[3]))
   end)
 end)

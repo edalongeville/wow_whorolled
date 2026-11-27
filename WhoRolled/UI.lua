@@ -68,7 +68,9 @@ local MAX_ROWS = 25 -- expanded list: past that, the rest is summed up as "+N"
 local panels = {}   -- [rollFrame] = panel
 local hooked = {}   -- [rollFrame] = true
 
--- A panel has two states:
+-- The panel to the right of a roll frame. Normally it is only the list shown while a roll
+-- button is hovered (see the counts on the buttons below). On a roll frame whose buttons are
+-- not found, it is a summary instead, with two states:
 --  collapsed: exactly as tall as its roll frame (stacked rolls never overlap), with the number
 --             of players per choice, the winner or how many are still choosing, and a hint;
 --  expanded:  the full list of players in one column, drawn above the other rolls.
@@ -183,7 +185,9 @@ local function Collapsed(p, d)
   p.shownLines = math.min(#lines, fit) -- for the tests
 end
 
-local function Expanded(p, d)
+-- filter: a choice ("need", "greed", ...) to list only the players who made it (hover on a roll
+-- button), or nil for everyone (click on the summary panel).
+local function Expanded(p, d, filter)
   local parent = p:GetParent()
   p:ClearAllPoints()
   p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
@@ -191,16 +195,25 @@ local function Expanded(p, d)
   p:SetWidth(EXPANDED_W)
   for _, fs in ipairs(p.summary) do fs:Hide() end
 
-  local entries = { { "|cff888888" .. L.CLICK_HIDE .. "|r", "", 0 } }
+  local header
+  if filter then
+    header = ChoiceIcon(filter) .. " " .. STATE_COLOR[filter] .. STATE_LABEL[filter] .. "|r"
+  else
+    header = "|cff888888" .. L.CLICK_HIDE .. "|r"
+  end
+  local entries = { { header, "", 0 } }
   local pending = 0
   for _, r in ipairs(d and SortedRolls(d) or {}) do
-    if (r.state or "pending") == "pending" then
+    local s = r.state or "pending"
+    if s == "pending" then
       pending = pending + 1
-    else
+    elseif not filter or s == filter then
       entries[#entries + 1] = { (r.winner and (WIN_ICON .. " ") or "") .. Colored(r.name, r.class), ChoiceText(r), 1 }
     end
   end
-  if pending > 0 then
+  if filter then
+    if #entries == 1 then entries[2] = { "|cff888888" .. L.NOBODY .. "|r", "", 0 } end
+  elseif pending > 0 then
     entries[#entries + 1] = { "|cff888888" .. L.PENDING .. " : " .. pending .. "|r", "", pending }
   elseif #entries == 1 then
     entries[2] = { "|cff888888" .. L.WAITING_CHOICES .. "|r", "", 0 }
@@ -235,15 +248,112 @@ local function Expanded(p, d)
 end
 
 FillPanel = function(p, d)
-  if d ~= p.drop then
-    -- a new roll in a reused roll frame starts in the default state
-    p.expanded = WhoRolledDB.settings.expanded and true or false
-  end
+  if d ~= p.drop then p.expanded = false end -- a new roll in a reused roll frame starts collapsed
   p.drop = d
+  p:EnableMouse(true)
   if p.expanded then Expanded(p, d) else Collapsed(p, d) end
   p:Show()
 end
 ns.CreatePanel, ns.FillPanel = CreatePanel, FillPanel -- for the tests
+
+---------------------------------------------------------------------------
+-- Counts on the roll frame's own Need / Greed / Pass buttons; hovering a button
+-- shows who made that choice in a list to the right of the roll frame. When the
+-- buttons cannot be found (an unknown roll frame), the summary panel is used.
+---------------------------------------------------------------------------
+-- Keys of the buttons on the game's roll frames: fields on Retail-style frames, global
+-- "<frame name><key>" on Classic-style ones (where Need is "RollButton").
+local BUTTON_KEYS = {
+  need = { "NeedButton", "RollButton" },
+  greed = { "GreedButton" },
+  pass = { "PassButton" },
+  transmog = { "TransmogButton" },
+}
+local buttonCache = {} -- [rollFrame] = { [state] = button } or false
+local badges = {}      -- [button] = count font string
+local hoverHooked = {} -- [button] = true
+local hovered = {}     -- [rollFrame] = state under the mouse
+local frameDrop = {}   -- [rollFrame] = drop shown
+
+local function FindRollButtons(f)
+  if f.whoRolledButtons then return f.whoRolledButtons end -- our test frames
+  if buttonCache[f] ~= nil then return buttonCache[f] or nil end
+  local name = f.GetName and f:GetName()
+  local found, any = {}, false
+  for state, keys in pairs(BUTTON_KEYS) do
+    for _, key in ipairs(keys) do
+      local b = f[key]
+      if type(b) ~= "table" and name then b = _G[name .. key] end
+      if type(b) == "table" and b.HookScript then
+        found[state] = b
+        any = true
+        break
+      end
+    end
+  end
+  buttonCache[f] = any and found or false
+  return any and found or nil
+end
+
+local function ShowHoverList(f)
+  local p = panels[f] or CreatePanel(f)
+  panels[f] = p
+  p.drop = frameDrop[f]
+  p:EnableMouse(false) -- a list to read, nothing to click
+  Expanded(p, frameDrop[f], hovered[f])
+  p:Show()
+end
+
+local function HookButton(f, state, b)
+  if hoverHooked[b] then return end
+  b:HookScript("OnEnter", function()
+    hovered[f] = state
+    if frameDrop[f] and WhoRolledDB.settings.attach then ShowHoverList(f) end
+  end)
+  b:HookScript("OnLeave", function()
+    hovered[f] = nil
+    if panels[f] and FindRollButtons(f) then panels[f]:Hide() end
+  end)
+  hoverHooked[b] = true
+end
+
+function ns.UpdateRollFrame(f, d)
+  local buttons = FindRollButtons(f)
+  local on = WhoRolledDB.settings.attach and d ~= nil
+  if not buttons then
+    if on then
+      panels[f] = panels[f] or CreatePanel(f)
+      FillPanel(panels[f], d)
+    elseif panels[f] then
+      panels[f]:Hide()
+    end
+    return
+  end
+
+  frameDrop[f] = d
+  local counts = {}
+  for _, r in ipairs(d and d.rolls or {}) do
+    local s = r.state or "pending"
+    counts[s] = (counts[s] or 0) + 1
+  end
+  for state, b in pairs(buttons) do
+    local fs = badges[b]
+    if not fs then
+      fs = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+      fs:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 4, -2)
+      badges[b] = fs
+    end
+    HookButton(f, state, b)
+    local n = on and counts[state] or 0
+    fs:SetText(n > 0 and tostring(n) or "")
+  end
+  if on and hovered[f] then
+    ShowHoverList(f)
+  elseif panels[f] then
+    panels[f]:Hide()
+  end
+end
+ns.badges = badges -- for the tests
 
 function ns.RefreshRollFrames()
   ns.ApplyRollPosition()
@@ -254,9 +364,8 @@ function ns.RefreshRollFrames()
         f:HookScript("OnShow", ns.RefreshRollFramesSoon)
         hooked[f] = true
       end
-      if f:IsShown() and f.rollID and WhoRolledDB.settings.attach then
-        panels[f] = panels[f] or CreatePanel(f)
-        FillPanel(panels[f], RC:DropForRoll(f.rollID))
+      if f:IsShown() and f.rollID then
+        ns.UpdateRollFrame(f, RC:DropForRoll(f.rollID))
       elseif panels[f] then
         panels[f]:Hide()
       end
@@ -475,13 +584,13 @@ end
 ---------------------------------------------------------------------------
 -- Change notifications from Core
 ---------------------------------------------------------------------------
-local testFrames = {} -- pool of fake roll frames, each with .panel and .drop
+local testFrames = {} -- pool of fake roll frames, each with .drop
 
 function ns.OnDropChanged(d)
   ns.RefreshRollFrames()
   if d.test then
     for _, f in ipairs(testFrames) do
-      if f.drop == d and f:IsShown() then FillPanel(f.panel, d) end
+      if f.drop == d and f:IsShown() then ns.UpdateRollFrame(f, d) end
     end
   end
   ns.RenderHistory()
@@ -635,7 +744,9 @@ local function GetTestFrame(i)
     if left <= 0 then ns.TestTimeout(self) end
   end)
 
-  f.panel = CreatePanel(f)
+  -- the same counts and hover lists as on the game's roll frames
+  f.whoRolledButtons = {}
+  for _, btn in ipairs(f.buttons) do f.whoRolledButtons[btn.choice] = btn end
   testFrames[i] = f
   return f
 end

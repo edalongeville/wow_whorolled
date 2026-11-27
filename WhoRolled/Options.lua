@@ -87,7 +87,6 @@ local function Build()
   -- Display
   Header(L.OPT_DISPLAY)
   Checkbox(L.OPT_ATTACH, function(s) return s.attach end, ns.SetAttach)
-  Checkbox(L.OPT_EXPANDED, function(s) return s.expanded end, ns.SetExpanded)
   y = y - 4
   local moveButton
   moveButton = Button(L.OPT_MOVE, 16, 200, function()

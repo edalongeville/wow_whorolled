@@ -6,7 +6,7 @@ The addon is still being tested.
 
 ## Features
 
-- A panel to the right of each loot roll frame, as tall as the roll frame: how many players chose Need, Greed or Pass, the winner (or how many have not chosen yet). Click it for the full list: every player in their class colour with their choice (Besoin / Cupidité / Passer, or Need / Greed / Pass on an English client) and their roll; click again to collapse. An option shows the full list by default
+- On each loot roll, the number of players who chose Need, Greed or Pass is shown on the roll frame's own buttons. Hover a button to see who made that choice (class colours, rolls, the winner) in a list to the right of the roll frame. On a roll frame whose buttons are not recognised, a summary panel is shown next to it instead (click it for the full list)
 - A history window (`/whorolled history`): one line per item with its winner and boss, then the choices grouped by type. Hover an item for its tooltip, shift-click to link it in chat. Movable, resizable, closes with Escape; keeps the last 200 items
 - Roll data comes from the client's loot history (`C_LootHistory`). If that turns out to be empty, `/whorolled source chat` reads the loot chat messages instead, matched against the client's own localized strings (works on French and English clients)
 - The loot roll frames can be moved anywhere with `/whorolled move`, and stay there
@@ -14,7 +14,7 @@ The addon is still being tested.
 
 ## Options
 
-Everything is in an options page: **Options -> AddOns -> WhoRolled**, `/whorolled`, or the game's add-on menu (the numbered icon by the minimap: left click for the options, right click for the history). It has the panel toggle, Move / Reset position / Test roll / Test roll x5 buttons, the history (open, number of items kept, clear), the roll data source and debug messages.
+Everything is in an options page: **Options -> AddOns -> WhoRolled**, `/whorolled`, or the game's add-on menu (the numbered icon by the minimap: left click for the options, right click for the history). It has the counts toggle, Move / Reset position / Test roll / Test roll x5 buttons, the history (open, number of items kept, clear), the roll data source and debug messages.
 
 ## Commands
 
@@ -27,7 +27,7 @@ The same things are available as commands, `/whorolled` (or `/wroll`):
 | `/whorolled test [1-10]` | play fake rolls, one by default (`/whorolled test 5`: five at once, stacked like real rolls) |
 | `/whorolled move` | show a green anchor to drag the loot roll frames (and their panels) anywhere; close it (X) to lock. The position is saved |
 | `/whorolled reset` | give the loot roll position back to the game (after a `/reload`) |
-| `/whorolled attach` | toggle the panels next to roll frames |
+| `/whorolled attach` | toggle the counts on the roll buttons (and the hover lists) |
 | `/whorolled source auto\|api\|chat` | where roll data comes from (`auto`: the loot history API when the client has it) |
 | `/whorolled status` | diagnostic info (client build, API present, source in use, active rolls) |
 | `/whorolled debug` | print each loot event in the chat |

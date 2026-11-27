@@ -20,7 +20,7 @@ L.DEBUG = "Debug messages: %s"
 L.ON = "on"
 L.OFF = "off"
 L.SOURCE = "Data source: %s (in use: %s)"
-L.ATTACH = "Panels next to roll frames: %s"
+L.ATTACH = "Counts on the roll buttons: %s"
 L.MOVE_LABEL = "WhoRolled – loot rolls\nDrag me, then close (X) to lock"
 L.MOVE_UNLOCKED = "Drag the green box to place the loot rolls, then close it (X) to lock."
 L.MOVE_LOCKED = "Loot roll position locked."
@@ -28,8 +28,8 @@ L.MOVE_RESET = "Loot roll position reset: /reload to give them back to the game.
 L.OPT_INTRO = "Shows who chose Need, Greed or Pass on each loot roll. Also in the add-on menu by the minimap "
   .. "(left click: options, right click: history)."
 L.OPT_DISPLAY = "Display"
-L.OPT_ATTACH = "Show a panel next to each loot roll"
-L.OPT_EXPANDED = "Show the full list of players by default (else click \"Details\")"
+L.OPT_ATTACH = "Show the number of players on the Need / Greed / Pass buttons (names on hover)"
+L.NOBODY = "Nobody"
 L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Details"
 L.CLICK_HIDE = "|TInterface\\Buttons\\UI-MinusButton-Up:12|t Hide"
 L.ITEM_HEARTHSTONE = "Hearthstone"
@@ -67,7 +67,7 @@ L.HELP = {
   "/whorolled move – move the loot roll frames",
   "/whorolled reset – give the loot roll position back to the game",
   "/whorolled test [1-10] – play fake rolls (one by default) to check the display",
-  "/whorolled attach – toggle panels next to roll frames",
+  "/whorolled attach – toggle the counts on the roll buttons",
   "/whorolled source auto|api|chat – where roll data comes from",
   "/whorolled status – show diagnostic info",
   "/whorolled debug – toggle debug messages",
@@ -86,7 +86,7 @@ if GetLocale() == "frFR" then
   L.ON = "activés"
   L.OFF = "désactivés"
   L.SOURCE = "Source des données : %s (utilisée : %s)"
-  L.ATTACH = "Panneaux à côté des jets : %s"
+  L.ATTACH = "Nombres sur les boutons des jets : %s"
   L.MOVE_LABEL = "WhoRolled – jets de butin\nDéplacez-moi, puis fermez (X) pour verrouiller"
   L.MOVE_UNLOCKED = "Déplacez le cadre vert pour placer les jets de butin, puis fermez-le (X) pour verrouiller."
   L.MOVE_LOCKED = "Position des jets de butin verrouillée."
@@ -94,9 +94,9 @@ if GetLocale() == "frFR" then
   L.OPT_INTRO = "Affiche qui a choisi Besoin, Cupidité ou Passer sur chaque jet de butin. Aussi dans le menu "
     .. "des add-ons près de la minicarte (clic gauche : options, clic droit : historique)."
   L.OPT_DISPLAY = "Affichage"
-  L.OPT_ATTACH = "Afficher un panneau à côté de chaque jet de butin"
-  L.OPT_EXPANDED = "Afficher la liste complète des joueurs par défaut (sinon, cliquer sur « Détails »)"
-  L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Détails"
+  L.OPT_ATTACH = "Afficher le nombre de joueurs sur les boutons Besoin / Cupidité / Passer (noms au survol)"
+  L.NOBODY = "Personne"
+    L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Détails"
   L.CLICK_HIDE = "|TInterface\\Buttons\\UI-MinusButton-Up:12|t Masquer"
   L.ITEM_HEARTHSTONE = "Pierre de foyer"
   L.ITEM_SILK = "Étoffe de soie"
@@ -133,7 +133,7 @@ if GetLocale() == "frFR" then
     "/whorolled move – déplacer les jets de butin",
     "/whorolled reset – rendre la position des jets de butin au jeu",
     "/whorolled test [1-10] – simuler des jets (un par défaut) pour vérifier l'affichage",
-    "/whorolled attach – activer/désactiver les panneaux à côté des jets",
+    "/whorolled attach – activer/désactiver les nombres sur les boutons des jets",
     "/whorolled source auto|api|chat – origine des données de jets",
     "/whorolled status – informations de diagnostic",
     "/whorolled debug – activer/désactiver le débogage",

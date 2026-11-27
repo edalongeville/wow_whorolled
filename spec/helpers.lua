@@ -21,7 +21,10 @@ M.FrameMethods = {
   RegisterEvent = function(self, e) M.registry[e] = self end,
   UnregisterEvent = function(self, e) if M.registry[e] == self then M.registry[e] = nil end end,
   SetScript = function(self, n, fn) self._scripts[n] = fn end,
-  HookScript = function(self, n, fn) self._scripts[n] = fn end,
+  HookScript = function(self, n, fn)
+    local prev = self._scripts[n]
+    self._scripts[n] = prev and function(...) prev(...); fn(...) end or fn
+  end,
   GetScript = function(self, n) return self._scripts[n] end,
   Show = function(self) self._shown = true end,
   Hide = function(self) self._shown = false end,
