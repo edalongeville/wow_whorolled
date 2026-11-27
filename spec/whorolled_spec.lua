@@ -162,9 +162,38 @@ describe("history and commands", function()
   it("runs the test roll to a winner", function()
     env.SlashCmdList.WHOROLLED("test")
     H.runTimers()
+    assert.are.equal(1, #env.WhoRolledDB.history)
     local d = env.WhoRolledDB.history[1]
     assert.is_true(d.test)
-    assert.are.equal("Dorn", d.winner)
+    local r = rollsByName(d)
+    assert.is_true(r[d.winner].winner)
+    assert.are.equal("need", r[d.winner].state)
+  end)
+
+  it("runs several test rolls at once", function()
+    env.SlashCmdList.WHOROLLED("test 5")
+    H.runTimers()
+    local h = env.WhoRolledDB.history
+    assert.are.equal(5, #h)
+    local items = {}
+    for _, d in ipairs(h) do
+      assert.is_true(d.test)
+      assert.is_true(d.winner ~= nil or d.allPassed == true)
+      items[d.itemID] = true
+    end
+    local n = 0
+    for _ in pairs(items) do n = n + 1 end
+    assert.are.equal(5, n) -- a different item on each roll
+    assert.is_true(h[3].allPassed)
+    assert.are.equal("greed", rollsByName(h[2])[h[2].winner].state)
+  end)
+
+  it("clamps the number of test rolls", function()
+    env.SlashCmdList.WHOROLLED("test 50")
+    assert.are.equal(10, #env.WhoRolledDB.history)
+    env.SlashCmdList.WHOROLLED("clear")
+    env.SlashCmdList.WHOROLLED("test abc")
+    assert.are.equal(1, #env.WhoRolledDB.history)
   end)
 
   it("runs the test roll when GetItemInfo errors (Forever client)", function()

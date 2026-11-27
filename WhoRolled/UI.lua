@@ -348,78 +348,144 @@ end
 ---------------------------------------------------------------------------
 -- Change notifications from Core
 ---------------------------------------------------------------------------
-local testFrame, testPanel
+local testFrames = {} -- pool of fake roll frames, each with .panel and .drop
 
 function ns.OnDropChanged(d)
   ns.RefreshRollFrames()
-  if d.test and testFrame and testFrame:IsShown() then FillPanel(testPanel, d) end
+  if d.test then
+    for _, f in ipairs(testFrames) do
+      if f.drop == d and f:IsShown() then FillPanel(f.panel, d) end
+    end
+  end
   ns.RenderHistory()
 end
 
 ---------------------------------------------------------------------------
--- Test mode: a fake roll frame that fills up over a few seconds
+-- Test mode: fake roll frames that fill up over a few seconds
 ---------------------------------------------------------------------------
--- Item link of the Hearthstone for the test roll. The global GetItemInfo errors on the Forever
--- client, so C_Item is tried first and every call is protected; a built link is the fallback.
-local function TestItemLink()
+ns.MAX_TEST_ROLLS = 10
+local TEST_ITEMS = {
+  { 6948, "Hearthstone", "ffffffff" },
+  { 4306, "Silk Cloth", "ffffffff" },
+  { 2589, "Linen Cloth", "ffffffff" },
+  { 765, "Silverleaf", "ffffffff" },
+  { 2770, "Copper Ore", "ffffffff" },
+  { 118, "Minor Healing Potion", "ffffffff" },
+  { 2447, "Peacebloom", "ffffffff" },
+  { 4338, "Mageweave Cloth", "ffffffff" },
+  { 159, "Refreshing Spring Water", "ffffffff" },
+  { 117, "Tough Jerky", "ffffffff" },
+}
+local TEST_FRAME_H, TEST_FRAME_GAP = 60, 6
+
+-- Item link for a test roll. The global GetItemInfo errors on the Forever client, so C_Item is
+-- tried first and every call is protected; a built link is the fallback.
+local function TestItemLink(item)
   local getters = { C_Item and C_Item.GetItemInfo, GetItemInfo }
   for i = 1, 2 do
     local get = getters[i]
     if get then
-      local ok, _, link = pcall(get, 6948)
+      local ok, _, link = pcall(get, item[1])
       if ok and link then return link end
     end
   end
-  return "|cffffffff|Hitem:6948::::::::1:::::::|h[Hearthstone]|h|r"
+  return ("|c%s|Hitem:%d::::::::1:::::::|h[%s]|h|r"):format(item[3], item[1], item[2])
 end
 
-function ns.RunTest()
-  local link = TestItemLink()
-
-  if not testFrame then
-    testFrame = CreateFrame("Frame", nil, UIParent, BACKDROP_TEMPLATE)
-    testFrame:SetSize(240, 60)
-    ApplyBackdrop(testFrame)
-    testFrame.text = testFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    testFrame.text:SetPoint("CENTER")
-    testPanel = CreatePanel(testFrame)
+local function GetTestFrame(i)
+  local f = testFrames[i]
+  if not f then
+    f = CreateFrame("Frame", nil, UIParent, BACKDROP_TEMPLATE)
+    f:SetSize(240, TEST_FRAME_H)
+    ApplyBackdrop(f)
+    f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.text:SetPoint("CENTER")
+    f.panel = CreatePanel(f)
+    testFrames[i] = f
   end
-  -- show the test roll where real rolls will appear
-  testFrame:ClearAllPoints()
-  if WhoRolledDB.settings.rollPos then
-    PlaceAnchor()
-    testFrame:SetPoint("BOTTOM", anchor, "BOTTOM", 0, 0)
-  else
-    testFrame:SetPoint("CENTER", 0, 180)
-  end
-  testFrame.text:SetText("TEST  " .. link)
-  testFrame:Show()
+  return f
+end
 
-  local d = RC:NewDrop("test:" .. time() .. ":" .. math.random(100000), link)
-  d.test = true
-  d.encounterName = "Test"
+-- Who chooses what on fake roll n: varied from one roll to the next, with a winner, a tie of
+-- greeds or everyone passing now and then.
+local CAST = { { "Arwyn", "PALADIN" }, { "Brogar", "WARRIOR" }, { "Célia", "PRIEST" }, { "Dorn", "HUNTER" } }
+local CHOICES = {
+  { "need", "pass", "pass", "need", "greed" },
+  { "greed", "greed", "pass", "greed", "pass" },
+  { "pass", "pass", "pass", "pass", "pass" },
+  { "need", "greed", "need", "pass", "need" },
+}
+
+local testRun = 0
+
+function ns.RunTest(count)
+  count = math.max(1, math.min(ns.MAX_TEST_ROLLS, math.floor(tonumber(count) or 1)))
+  testRun = testRun + 1
+  local run = testRun
+
+  for _, f in ipairs(testFrames) do f:Hide() end
 
   local me, myClass = UnitName("player"), select(2, UnitClass("player"))
-  local cast = {
-    { me, myClass }, { "Arwyn", "PALADIN" }, { "Brogar", "WARRIOR" }, { "Célia", "PRIEST" }, { "Dorn", "HUNTER" },
-  }
-  for _, c in ipairs(cast) do RC:SetRoll(d, c[1], c[2], "pending") end
-  ns.OnDropChanged(d)
+  local players = { { me, myClass } }
+  for _, c in ipairs(CAST) do players[#players + 1] = c end
 
-  local steps = {
-    { 1.0, function() RC:SetRoll(d, "Arwyn", nil, "need") end },
-    { 1.6, function() RC:SetRoll(d, me, nil, "greed") end },
-    { 2.2, function() RC:SetRoll(d, "Célia", nil, "pass") end },
-    { 2.8, function() RC:SetRoll(d, "Brogar", nil, "pass") end },
-    { 3.4, function() RC:SetRoll(d, "Dorn", nil, "need") end },
-    { 4.4, function()
-      RC:SetRoll(d, "Arwyn", nil, nil, 72)
-      RC:SetRoll(d, "Dorn", nil, nil, 88, true)
-      d.winner = "Dorn"
-    end },
-  }
-  for _, s in ipairs(steps) do
-    C_Timer.After(s[1], function() s[2](); ns.OnDropChanged(d) end)
+  -- stack the fake frames upwards from where real rolls appear
+  local base, basePoint, baseX, baseY
+  if WhoRolledDB.settings.rollPos then
+    PlaceAnchor()
+    base, basePoint, baseX, baseY = anchor, "BOTTOM", 0, 0
+  else
+    base, basePoint, baseX, baseY = UIParent, "BOTTOM", 0, 200
   end
-  C_Timer.After(12, function() testFrame:Hide() end)
+
+  for i = 1, count do
+    local f = GetTestFrame(i)
+    local link = TestItemLink(TEST_ITEMS[(i - 1) % #TEST_ITEMS + 1])
+    f:ClearAllPoints()
+    f:SetPoint("BOTTOM", base, basePoint, baseX, baseY + (i - 1) * (TEST_FRAME_H + TEST_FRAME_GAP))
+    f.text:SetText("TEST " .. i .. "  " .. link)
+
+    local d = RC:NewDrop("test:" .. run .. ":" .. i .. ":" .. time(), link)
+    d.test = true
+    d.encounterName = "Test"
+    f.drop = d
+    for _, p in ipairs(players) do RC:SetRoll(d, p[1], p[2], "pending") end
+    f:Show()
+    ns.OnDropChanged(d)
+
+    local choices = CHOICES[(i - 1) % #CHOICES + 1]
+    local delay = 0.3 * (i - 1) -- rolls start one after the other
+    for j, p in ipairs(players) do
+      C_Timer.After(delay + 0.6 * j, function()
+        RC:SetRoll(d, p[1], nil, choices[j])
+        ns.OnDropChanged(d)
+      end)
+    end
+
+    C_Timer.After(delay + 0.6 * #players + 1, function()
+      -- the best need wins, else the best greed, else everyone passed
+      local best
+      for _, want in ipairs({ "need", "greed" }) do
+        for _, r in ipairs(d.rolls) do
+          if r.state == want then
+            r.roll = math.random(1, 100)
+            if not best or r.roll > best.roll then best = r end
+          end
+        end
+        if best then break end
+      end
+      if best then
+        best.winner = true
+        d.winner = best.name
+      else
+        d.allPassed = true
+      end
+      ns.OnDropChanged(d)
+    end)
+  end
+
+  C_Timer.After(0.3 * count + 0.6 * #players + 8, function()
+    if run ~= testRun then return end -- a newer test owns the frames
+    for _, f in ipairs(testFrames) do f:Hide() end
+  end)
 end

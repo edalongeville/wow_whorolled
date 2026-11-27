@@ -433,7 +433,7 @@ SlashCmdList.WHOROLLED = function(msg)
   elseif cmd == "history" then
     ns.ToggleHistory()
   elseif cmd == "test" then
-    ns.RunTest()
+    ns.RunTest(tonumber(arg))
   elseif cmd == "debug" then
     ns.SetDebug(not s.debug)
   elseif cmd == "move" then
