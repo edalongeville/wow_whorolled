@@ -661,11 +661,93 @@ end
 
 local TestChoose -- defined below
 
-local function GetTestFrame(i)
-  local f = testFrames[i]
-  if f then return f end
+-- A test roll is the game's own roll frame when possible: a new frame from the template the
+-- game's rolls are made from (GroupLootFrameTemplate), with the template's scripts switched off
+-- (they would ask the server about a roll that does not exist) and its buttons wired to the test.
+-- The game's GroupLootFrame1-4 are never touched. When the template is missing or its parts
+-- cannot be found, a look-alike frame is built instead.
+local LOOT_TEMPLATE = "GroupLootFrameTemplate"
+
+local function TooltipText(text)
+  return function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(text)
+    GameTooltip:Show()
+  end
+end
+
+local function HideTooltip() GameTooltip:Hide() end
+
+local function WireIcon(f, icon)
+  icon:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    pcall(GameTooltip.SetHyperlink, GameTooltip, f.link)
+    GameTooltip:Show()
+  end)
+  icon:SetScript("OnLeave", HideTooltip)
+  icon:SetScript("OnClick", function(self, button)
+    if f.link then SetItemRef(f.link, f.link, button, self) end
+  end)
+end
+
+local function WireButton(f, btn, choice, label)
+  btn.choice = choice
+  btn:SetScript("OnClick", function() TestChoose(f, choice) end)
+  btn:SetScript("OnEnter", TooltipText(label))
+  btn:SetScript("OnLeave", HideTooltip)
+end
+
+local function BuildFromTemplate(i)
+  local name = "WhoRolledTestRoll" .. i
+  local ok, f = pcall(CreateFrame, "Frame", name, UIParent, LOOT_TEMPLATE)
+  if not ok or type(f) ~= "table" then return nil end
+  f:Hide()
+  -- parts are fields on Retail-style templates, "<name><suffix>" globals on Classic-style ones
+  local function part(key, suffix)
+    local v = f[key]
+    if type(v) ~= "table" then v = _G[name .. (suffix or key)] end
+    return type(v) == "table" and v or nil
+  end
+  local iconFrame = part("IconFrame")
+  local iconTex = iconFrame and type(iconFrame.Icon) == "table" and iconFrame.Icon or _G[name .. "IconFrameIcon"]
+  local nameText = part("Name")
+  local timer = part("Timer")
+  local need = part("NeedButton") or part("RollButton")
+  local greed, pass = part("GreedButton"), part("PassButton")
+  if not (iconFrame and iconTex and nameText and timer and need and greed and pass) then
+    ns.Debug("test roll: " .. LOOT_TEMPLATE .. " parts not found, using a look-alike")
+    return nil
+  end
+
+  -- switch the template's own logic off
+  if f.UnregisterAllEvents then f:UnregisterAllEvents() end
+  for _, script in ipairs({ "OnEvent", "OnShow", "OnHide", "OnUpdate" }) do pcall(f.SetScript, f, script, nil) end
+  pcall(timer.SetScript, timer, "OnUpdate", nil)
+  for _, key in ipairs({ "DisenchantButton", "TransmogButton" }) do
+    local b = part(key)
+    if b then b:Hide() end
+  end
+
+  WireIcon(f, iconFrame)
+  WireButton(f, need, "need", L.NEED)
+  WireButton(f, greed, "greed", L.GREED)
+  WireButton(f, pass, "pass", L.PASS)
+  for _, b in ipairs({ need, greed, pass }) do b:Show() end
+  if nameText.SetVertexColor then nameText:SetVertexColor(1, 1, 1) end -- the colour comes from the text
+  timer:SetMinMaxValues(0, 1)
+  local tag = timer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  tag:SetPoint("CENTER")
+  tag:SetText(L.TEST_TAG) -- so a test roll is never mistaken for a real one
+
+  f.icon, f.iconTex, f.name, f.bar = iconFrame, iconTex, nameText, timer
+  f.buttons = { need, greed, pass }
+  f.fromTemplate = true
+  return f
+end
+
+local function BuildLookalike()
   local w, h = TestFrameSize()
-  f = CreateFrame("Frame", nil, UIParent, BACKDROP_TEMPLATE)
+  local f = CreateFrame("Frame", nil, UIParent, BACKDROP_TEMPLATE)
   f:SetSize(w, h)
   f:SetFrameStrata("MEDIUM")
   if f.SetBackdrop then
@@ -677,25 +759,15 @@ local function GetTestFrame(i)
     })
   end
 
-  -- item icon (tooltip on hover, shift-click links it)
   local size = math.min(40, h - 20)
   local icon = CreateFrame("Button", nil, f)
   icon:SetSize(size, size)
   icon:SetPoint("LEFT", f, "LEFT", 10, 0)
-  icon.tex = icon:CreateTexture(nil, "ARTWORK")
-  icon.tex:SetAllPoints(icon)
-  icon:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    pcall(GameTooltip.SetHyperlink, GameTooltip, f.link)
-    GameTooltip:Show()
-  end)
-  icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
-  icon:SetScript("OnClick", function(self, button)
-    if f.link then SetItemRef(f.link, f.link, button, self) end
-  end)
-  f.icon = icon
+  local iconTex = icon:CreateTexture(nil, "ARTWORK")
+  iconTex:SetAllPoints(icon)
+  WireIcon(f, icon)
+  f.icon, f.iconTex = icon, iconTex
 
-  -- Need / Greed / Pass, as on a real roll
   f.buttons = {}
   for k, b in ipairs(ROLL_BUTTONS) do
     local btn = CreateFrame("Button", nil, f)
@@ -704,14 +776,7 @@ local function GetTestFrame(i)
     btn:SetNormalTexture(b[2] .. "-Up")
     btn:SetPushedTexture(b[2] .. "-Down")
     btn:SetHighlightTexture(b[2] .. "-Highlight")
-    btn:SetScript("OnClick", function() TestChoose(f, b[1]) end)
-    btn:SetScript("OnEnter", function(self)
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:SetText(b[3])
-      GameTooltip:Show()
-    end)
-    btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    btn.choice = b[1]
+    WireButton(f, btn, b[1], b[3])
     f.buttons[k] = btn
   end
 
@@ -721,7 +786,6 @@ local function GetTestFrame(i)
   f.name:SetJustifyH("LEFT")
   if f.name.SetWordWrap then f.name:SetWordWrap(false) end
 
-  -- the roll timer
   local bar = CreateFrame("StatusBar", nil, f)
   bar:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 8, 0)
   bar:SetPoint("RIGHT", f, "RIGHT", -12, 0)
@@ -729,13 +793,20 @@ local function GetTestFrame(i)
   bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
   bar:SetStatusBarColor(1, 0.82, 0)
   bar:SetMinMaxValues(0, 1)
-  bar.bg = bar:CreateTexture(nil, "BACKGROUND")
-  bar.bg:SetAllPoints(bar)
-  bar.bg:SetColorTexture(0, 0, 0, 0.6)
-  bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  bar.text:SetPoint("CENTER")
-  bar.text:SetText(L.TEST_TAG) -- so a test roll is never mistaken for a real one
+  local bg = bar:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints(bar)
+  bg:SetColorTexture(0, 0, 0, 0.6)
+  local tag = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  tag:SetPoint("CENTER")
+  tag:SetText(L.TEST_TAG)
   f.bar = bar
+  return f
+end
+
+local function GetTestFrame(i)
+  local f = testFrames[i]
+  if f then return f end
+  f = BuildFromTemplate(i) or BuildLookalike()
 
   f:SetScript("OnUpdate", function(self)
     if not self.deadline then return end
@@ -855,7 +926,7 @@ function ns.RunTest(count)
     f:ClearAllPoints()
     f:SetPoint("BOTTOM", base, "BOTTOM", 0, baseY + (i - 1) * ((h or 64) + TEST_FRAME_GAP))
     f.link = link
-    f.icon.tex:SetTexture(TestItemIcon(item[1]))
+    f.iconTex:SetTexture(TestItemIcon(item[1]))
     local color, name = link:match("^|c(%x+)|H.-|h%[(.-)%]|h")
     f.name:SetText(("|c%s%s|r"):format(color or "ffffffff", name or item[2]))
 

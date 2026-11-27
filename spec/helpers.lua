@@ -84,6 +84,9 @@ function M.load(opts)
       table.insert(M.created, { kind = kind, template = template, frame = f })
       f._shown = name ~= "WhoRolledHistoryFrame"
       if name then M.env[name] = f end -- named frames are globals, as in the game
+      if template == "GroupLootFrameTemplate" and opts.lootTemplate then
+        M.buildLootTemplate(f, name, opts.lootTemplate)
+      end
       return f
     end,
     UIParent = newFrame("UIParent"),
@@ -158,6 +161,28 @@ function M.widgets(template)
     if c.template == template then t[#t + 1] = c.frame end
   end
   return t
+end
+
+-- The parts of the game's roll frame template: Classic-style ("<name><part>" globals, Need is
+-- RollButton) or Retail-style (fields). Every template button starts with a script that must not
+-- run in a test (it would roll on a real loot).
+function M.buildLootTemplate(f, name, style)
+  local function make(kind, suffix, key, parent)
+    local child = M.env.CreateFrame(kind, style == "classic" and (name .. suffix) or nil, parent or f)
+    if style == "retail" then (parent or f)[key] = child end
+    return child
+  end
+  local icon = make("Button", "IconFrame", "IconFrame")
+  if style == "retail" then icon.Icon = newFrame() else M.env[name .. "IconFrameIcon"] = newFrame() end
+  make("Frame", "Name", "Name")
+  make("StatusBar", "Timer", "Timer")
+  local buttons = style == "classic" and { "RollButton", "GreedButton", "PassButton" }
+    or { "NeedButton", "GreedButton", "PassButton", "TransmogButton" }
+  for _, key in ipairs(buttons) do
+    local b = make("Button", key, key)
+    b._scripts.OnClick = function() error("RollOnLoot called by a test roll") end
+  end
+  f._scripts.OnShow = function() error("template OnShow ran") end
 end
 
 function M.fire(event, ...)

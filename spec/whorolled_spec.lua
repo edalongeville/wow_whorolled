@@ -576,3 +576,28 @@ describe("counts on the roll buttons", function()
     assert.are.equal("", badge(ns.testFrames[1].buttons[3]))
   end)
 end)
+
+describe("test rolls from the game's roll frame template", function()
+  for _, style in ipairs({ "classic", "retail" }) do
+    it("uses the template's own frame (" .. style .. " style) with its scripts off", function()
+      local ns, env = H.load({ lootTemplate = style })
+      env.SlashCmdList.WHOROLLED("test")
+      local f = ns.testFrames[1]
+      assert.is_true(f.fromTemplate)
+      assert.is_nil(f._scripts.OnShow) -- template logic switched off
+      assert.is_truthy(f._scripts.OnUpdate) -- ours: the test timer
+      H.runTimers()
+      local need = f.buttons[1]
+      assert.has_no.errors(function() need._scripts.OnClick(need) end) -- no real roll
+      assert.are.equal("need", rollsByName(f.drop).Panda.state)
+      assert.is_truthy(f.drop.winner)
+      assert.are.equal("2", ns.badges[need]:GetText()) -- Célia and you
+    end)
+  end
+
+  it("falls back to a look-alike when the template has unknown parts", function()
+    local ns, env = H.load()
+    env.SlashCmdList.WHOROLLED("test")
+    assert.is_nil(ns.testFrames[1].fromTemplate)
+  end)
+end)
