@@ -1,0 +1,15 @@
+# BigWigs packager. The addon lives in the WhoRolled/ subfolder of the repository, so it is moved
+# to the top of the release and everything else is left out of the zip.
+package-as: WhoRolled
+
+move-folders:
+  WhoRolled/WhoRolled: WhoRolled
+
+ignore:
+  - .github
+  - .luacheckrc
+  - .pkgmeta
+  - spec
+  - tools
+  - README.md
+  - LICENSE

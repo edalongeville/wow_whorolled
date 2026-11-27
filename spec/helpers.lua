@@ -1,0 +1,116 @@
+-- Stubbed WoW API, enough to load the addon files and drive them through events.
+-- load_addon(opts) returns ns (the addon namespace), the frame stub registry and helpers.
+local M = {}
+
+local function newFrame(name)
+  local f = { _scripts = {}, _events = {}, _shown = true, _name = name }
+  return setmetatable(f, {
+    __index = function(_, k)
+      local m = M.FrameMethods[k]
+      if m ~= nil then return m or nil end -- false: a field the frame doesn't have
+      return function() end -- any other widget method is a no-op
+    end,
+  })
+end
+
+M.FrameMethods = {
+  RegisterEvent = function(self, e) M.registry[e] = self end,
+  UnregisterEvent = function(self, e) if M.registry[e] == self then M.registry[e] = nil end end,
+  SetScript = function(self, n, fn) self._scripts[n] = fn end,
+  HookScript = function(self, n, fn) self._scripts[n] = fn end,
+  GetScript = function(self, n) return self._scripts[n] end,
+  Show = function(self) self._shown = true end,
+  Hide = function(self) self._shown = false end,
+  SetShown = function(self, v) self._shown = v and true or false end,
+  IsShown = function(self) return self._shown end,
+  SetText = function(self, t) self._text = t end,
+  GetText = function(self) return self._text end,
+  CreateFontString = function() return newFrame() end,
+  AddMessage = function(self, msg) self._lines = self._lines or {}; table.insert(self._lines, msg) end,
+  Clear = function(self) self._lines = {} end,
+  -- fields, not methods: absent on our stub frames
+  TitleText = false,
+  title = false,
+}
+
+function M.load(opts)
+  opts = opts or {}
+  M.registry = {}
+  M.printed = {}
+  M.timers = {}
+  local env = {
+    -- Lua / WoW std
+    time = os.time, date = os.date, wipe = function(t) for k in pairs(t) do t[k] = nil end return t end,
+    tinsert = table.insert,
+    print = function(...)
+      local t = { ... }
+      for i = 1, select("#", ...) do t[i] = tostring(t[i]) end
+      table.insert(M.printed, table.concat(t, " "))
+    end,
+    -- frames
+    CreateFrame = function(_, name)
+      local f = newFrame(name)
+      f._shown = name ~= "WhoRolledHistoryFrame"
+      return f
+    end,
+    UIParent = newFrame("UIParent"),
+    GameTooltip = newFrame("GameTooltip"),
+    UISpecialFrames = {},
+    C_Timer = { After = function(sec, fn) table.insert(M.timers, { sec, fn }) end },
+    -- game
+    GetLocale = function() return opts.locale or "frFR" end,
+    GetTime = function() return os.clock() end,
+    GetBuildInfo = function() return "1.60.1", "12345", "Nov 2026", 16001 end,
+    UnitName = function(u) if u == "player" then return "Panda" end end,
+    UnitClass = function() return "Mage", "MAGE" end,
+    IsInRaid = function() return false end,
+    GetNumGroupMembers = function() return 0 end,
+    GetItemInfo = function() return nil end,
+    GetLootRollItemLink = function(id) return opts.rollLinks and opts.rollLinks[id] end,
+    RAID_CLASS_COLORS = { MAGE = { r = 0.25, g = 0.78, b = 0.92 }, WARRIOR = { r = 0.78, g = 0.61, b = 0.43 } },
+    SlashCmdList = {},
+    NEED = "Besoin", GREED = "Cupidité", PASS = "Passer",
+    -- frFR loot strings
+    LOOT_ROLL_NEED = "%s a choisi Besoin pour : %s",
+    LOOT_ROLL_GREED = "%s a choisi Cupidité pour : %s",
+    LOOT_ROLL_PASSED = "%s a passé pour : %s",
+    LOOT_ROLL_PASSED_AUTO = "%s a passé automatiquement pour : %s car il ne peut pas ramasser cet objet.",
+    LOOT_ROLL_NEED_SELF = "Vous avez choisi Besoin pour : %s",
+    LOOT_ROLL_ROLLED_NEED = "Jet de Besoin - %d pour %s par %s",
+    LOOT_ROLL_ROLLED_GREED = "Jet de Cupidité - %d pour %s par %s",
+    LOOT_ROLL_WON = "%s a gagné : %s",
+    LOOT_ROLL_YOU_WON = "Vous avez gagné : %s",
+    LOOT_ROLL_ALL_PASSED = "Tout le monde a passé pour : %s",
+    Enum = opts.noEnum and {} or {
+      EncounterLootDropRollState = { NeedMainSpec = 0, NeedOffSpec = 1, Transmog = 2, Greed = 3, NoRoll = 4, Pass = 5 },
+    },
+    C_LootHistory = opts.lootHistory,
+  }
+  env._G = env
+  setmetatable(env, { __index = _G })
+
+  local ns = {}
+  for _, file in ipairs({ "Locales.lua", "Core.lua", "UI.lua" }) do
+    local chunk = assert(loadfile("WhoRolled/" .. file))
+    setfenv(chunk, env)
+    chunk("WhoRolled", ns)
+  end
+  M.env = env
+  M.fire("ADDON_LOADED", "WhoRolled")
+  M.fire("PLAYER_LOGIN")
+  return ns, env
+end
+
+function M.fire(event, ...)
+  local f = M.registry[event]
+  if f then f._scripts.OnEvent(f, event, ...) end
+end
+
+function M.runTimers()
+  local t = M.timers
+  M.timers = {}
+  table.sort(t, function(a, b) return a[1] < b[1] end)
+  for _, x in ipairs(t) do x[2]() end
+end
+
+return M

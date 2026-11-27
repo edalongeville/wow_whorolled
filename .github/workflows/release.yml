@@ -1,0 +1,107 @@
+name: Release
+
+# Two ways to release, both ending in the same packaging step (BigWigs packager: GitHub release
+# with the addon zip):
+#
+#  1. Button: Actions -> Release -> Run workflow (from main). The version to release is the
+#     `## Version` already committed in WhoRolled/WhoRolled.toc (every change to the addon
+#     bumps it, see the CI version check): nothing is chosen or edited here. The workflow fails
+#     when that version has already been released (a tag `v<version>` exists), runs the lint and
+#     tests, tags the current main commit `v<version>` and packages it. "dry_run" does the checks
+#     and the tests and stops there (nothing is tagged or uploaded).
+#  2. Tag: push a tag `v<version>` that matches `## Version` in the .toc.
+#
+# No CurseForge upload yet (no project page). To add it later: create the CurseForge project,
+# add `## X-Curse-Project-ID: <id>` to WhoRolled/WhoRolled.toc, add the CF_API_TOKEN secret
+# (Settings -> Secrets and variables -> Actions; https://www.curseforge.com/account/api-tokens)
+# and pass it to the packager step below (CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}).
+#
+# The button pushes only a tag (no commit), with the workflow's own token. Pushes made with that
+# token do not start other workflows, so the tag it creates does not start this one a second time.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry run (check the version and test only, no tag or upload)
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # push the release tag, create the GitHub release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Only from main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow from main (selected: ${GITHUB_REF_NAME})"
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the packager builds the changelog from the tag history
+
+      - name: Read the version to release
+        id: version
+        run: |
+          toc=WhoRolled/WhoRolled.toc
+          version=$(sed -n 's/^## Version:[[:space:]]*//p' "$toc" | tr -d '\r' | head -1)
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=$toc::## Version '$version' is not x.y.z"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            git fetch --tags --force origin
+            if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+              echo "::error::Version $version was already released (tag v$version exists): bump ## Version in $toc first"
+              exit 1
+            fi
+          fi
+          echo "### Release $version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tag matches the .toc version
+        if: github.event_name == 'push'
+        run: |
+          toc=$(sed -n 's/^## Version:[[:space:]]*//p' WhoRolled/WhoRolled.toc | tr -d '\r' | head -1)
+          if [ "${GITHUB_REF_NAME}" != "v${toc}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match .toc version v${toc}"
+            exit 1
+          fi
+
+      - name: Install Lua tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1 lua-check lua-busted
+
+      - name: Lint and test
+        run: |
+          luacheck .
+          busted --lua=lua5.1 spec
+
+      - name: Tag the release
+        if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "WhoRolled ${VERSION}"
+          git push origin "refs/tags/v${VERSION}"
+
+      - name: Package and upload
+        if: ${{ !inputs.dry_run }}
+        uses: BigWigsMods/packager@v2
+        env:
+          GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
