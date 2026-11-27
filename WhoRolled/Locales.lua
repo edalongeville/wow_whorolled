@@ -37,7 +37,6 @@ L.WINS_NO_ROLL = "%s wins"
 L.ALL_PASSED_BAR = "Everyone passed"
 L.BAR_TOOLTIP = "Click to see who chose what"
 L.NOBODY = "Nobody"
-L.INSPECT_SAVED = "Also saved in WhoRolled.lua (SavedVariables) after a /reload."
 L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Details"
 L.CLICK_HIDE = "|TInterface\\Buttons\\UI-MinusButton-Up:12|t Hide"
 L.ITEM_HEARTHSTONE = "Hearthstone"
@@ -56,6 +55,7 @@ L.OPT_RESET_POS = "Reset position"
 L.OPT_TEST = "Test roll"
 L.OPT_TEST_5 = "Test roll x5"
 L.TEST_TAG = "Test"
+L.TEST_TOOLTIP = "Test roll, not real loot"
 L.OPT_HISTORY = "History"
 L.OPT_OPEN_HISTORY = "Open the history"
 L.OPT_MAX_HISTORY = "Items kept"
@@ -78,7 +78,6 @@ L.HELP = {
   "/whorolled attach – toggle the bar under the loot rolls",
   "/whorolled source auto|api|chat – where roll data comes from",
   "/whorolled status – show diagnostic info",
-  "/whorolled inspect – describe the game's roll frame (to adapt the addon)",
   "/whorolled debug – toggle debug messages",
   "/whorolled clear – erase the history",
 }
@@ -112,7 +111,6 @@ if GetLocale() == "frFR" then
   L.ALL_PASSED_BAR = "Tout le monde a passé"
   L.BAR_TOOLTIP = "Cliquer pour voir qui a choisi quoi"
   L.NOBODY = "Personne"
-  L.INSPECT_SAVED = "Aussi enregistré dans WhoRolled.lua (SavedVariables) après un /reload."
     L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Détails"
   L.CLICK_HIDE = "|TInterface\\Buttons\\UI-MinusButton-Up:12|t Masquer"
   L.ITEM_HEARTHSTONE = "Pierre de foyer"
@@ -131,6 +129,7 @@ if GetLocale() == "frFR" then
   L.OPT_TEST = "Jet de test"
   L.OPT_TEST_5 = "Jet de test x5"
   L.TEST_TAG = "Test"
+  L.TEST_TOOLTIP = "Jet de test, pas du vrai butin"
   L.OPT_HISTORY = "Historique"
   L.OPT_OPEN_HISTORY = "Ouvrir l'historique"
   L.OPT_MAX_HISTORY = "Objets conservés"
@@ -153,7 +152,6 @@ if GetLocale() == "frFR" then
     "/whorolled attach – activer/désactiver la barre sous les jets de butin",
     "/whorolled source auto|api|chat – origine des données de jets",
     "/whorolled status – informations de diagnostic",
-    "/whorolled inspect – décrire le cadre de jet du jeu (pour adapter l'addon)",
     "/whorolled debug – activer/désactiver le débogage",
     "/whorolled clear – effacer l'historique",
   }

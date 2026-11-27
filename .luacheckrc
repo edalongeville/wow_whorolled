@@ -16,6 +16,7 @@ globals = {
 
 -- WoW API and global strings used (read only).
 read_globals = {
+  "C_Texture", "ITEM_QUALITY_COLORS", "LOOT_BORDER_BY_QUALITY", "GroupLootContainer_Update",
   "Ambiguate",
   "BackdropTemplateMixin",
   "C_AddOns",

@@ -411,39 +411,20 @@ describe("options panel", function()
   end)
 end)
 
-describe("test rolls from the game's roll frame template", function()
-  for _, style in ipairs({ "classic", "retail" }) do
-    it("uses the template's own frame (" .. style .. " style) with its scripts off", function()
-      local ns, env = H.load({ lootTemplate = style })
-      env.SlashCmdList.WHOROLLED("test")
-      local f = ns.testFrames[1]
-      assert.is_true(f.fromTemplate)
-      assert.is_nil(f._scripts.OnShow) -- template logic switched off
-      assert.is_truthy(f._scripts.OnUpdate) -- ours: the test timer
-      H.runTimers()
-      local need = f.buttons[1]
-      assert.has_no.errors(function() need._scripts.OnClick(need) end) -- no real roll
-      assert.are.equal("need", rollsByName(f.drop).Panda.state)
-      assert.is_truthy(f.drop.winner)
-      assert.matches("gagne", ns.bars[f].text:GetText(), 1, true)
-    end)
-  end
-
-  it("falls back to a look-alike when the template has unknown parts", function()
+describe("test roll window", function()
+  it("is drawn at the game's roll window size, with playable Need / Greed / Pass buttons", function()
     local ns, env = H.load()
     env.SlashCmdList.WHOROLLED("test")
-    assert.is_nil(ns.testFrames[1].fromTemplate)
-  end)
-end)
-
-describe("inspect", function()
-  it("describes the roll frame and the template, and saves it", function()
-    local _, env = H.load({ lootTemplate = "classic" })
-    env.CreateFrame("Frame", "GroupLootFrame1")
-    assert.has_no.errors(function() env.SlashCmdList.WHOROLLED("inspect") end)
-    local text = table.concat(env.WhoRolledDB.inspect, "\n")
-    assert.matches("GroupLootFrame1", text, 1, true)
-    assert.matches("GroupLootFrameTemplate", text, 1, true)
+    local f = ns.testFrames[1]
+    local w, h = f:GetSize()
+    assert.are.same({ 277, 67 }, { w, h })
+    assert.are.equal(3, #f.buttons)
+    H.runTimers()
+    local need = f.buttons[1]
+    assert.has_no.errors(function() need._scripts.OnClick(need) end) -- no real roll
+    assert.are.equal("need", rollsByName(f.drop).Panda.state)
+    assert.is_truthy(f.drop.winner)
+    assert.matches("gagne", ns.bars[f].text:GetText(), 1, true)
   end)
 end)
 
@@ -543,6 +524,7 @@ describe("bar under each roll", function()
     local y2 = select(5, ns.testFrames[2]:GetPoint(1))
     local _, h = ns.testFrames[1]:GetSize()
     assert.is_true(y2 - y1 >= h + 22) -- frame + bar, no overlap
+    assert.are.equal(100, y2 - y1) -- the game's own slot height
   end)
 
   it("goes away when turned off", function()
@@ -558,6 +540,20 @@ describe("bar under each roll", function()
     env.WhoRolledDB.settings.source = "chat"
     H.fire("START_LOOT_ROLL", 7, 60)
     ns.RefreshRollFrames()
+    H.fire("CHAT_MSG_LOOT", "Zed a passé pour : " .. LINK)
+    assert.matches(ns.STATE_ICON.pass .. " 1", ns.bars[frame].text:GetText(), 1, true)
+  end)
+
+  it("shows under Forever's roll windows (GroupLootContainer.rollFrames)", function()
+    local frame = env.CreateFrame("Frame")
+    frame.rollID = 8
+    env.GroupLootContainer.rollFrames = { frame }
+    env.GroupLootContainer_Update = function() end
+    env.GetLootRollItemLink = function() return LINK end
+    env.WhoRolledDB.settings.source = "chat"
+    H.fire("START_LOOT_ROLL", 8, 60)
+    ns.RefreshRollFrames()
+    assert.is_function(H.globalHooks.GroupLootContainer_Update)
     H.fire("CHAT_MSG_LOOT", "Zed a passé pour : " .. LINK)
     assert.matches(ns.STATE_ICON.pass .. " 1", ns.bars[frame].text:GetText(), 1, true)
   end)

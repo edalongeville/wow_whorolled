@@ -42,6 +42,8 @@ M.FrameMethods = {
   GetParent = function(self) return self._parent end,
   SetHeight = function(self, h) self._height = h end,
   GetHeight = function(self) return self._height end,
+  SetFrameLevel = function(self, l) self._level = l end,
+  GetFrameLevel = function(self) return self._level or 1 end,
   SetSize = function(self, w, h) self._width, self._height = w, h end,
   CreateFontString = function() return newFrame() end,
   CreateTexture = function() return newFrame() end,
@@ -95,6 +97,11 @@ function M.load(opts)
     UIParent = newFrame("UIParent"),
     GroupLootContainer = (not opts.noContainer) and newFrame("GroupLootContainer") or nil,
     hooksecurefunc = function(frame, method, fn)
+      if type(frame) == "string" then -- global function hook
+        M.globalHooks = M.globalHooks or {}
+        M.globalHooks[frame] = method -- (name, fn) form
+        return
+      end
       assert(method == "SetPoint", "only SetPoint hooks are stubbed")
       frame._setPointHooks = frame._setPointHooks or {}
       table.insert(frame._setPointHooks, fn)

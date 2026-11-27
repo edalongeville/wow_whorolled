@@ -16,7 +16,7 @@ The addon is still being tested.
 - A history window (`/whorolled history`): one line per item with its winner and boss, then the choices grouped by type. Hover an item for its tooltip, shift-click to link it in chat. Movable, resizable, closes with Escape; keeps the last 200 items
 - Roll data comes from the client's loot history (`C_LootHistory`). If that turns out to be empty, `/whorolled source chat` reads the loot chat messages instead, matched against the client's own localized strings (works on French and English clients)
 - The loot roll frames can be moved anywhere with `/whorolled move`, and stay there
-- `/whorolled test` plays a fake loot roll to check the display without a dungeon, `/whorolled test 5` five at once. The fake rolls are made from the game's own roll frame template (GroupLootFrameTemplate, with its scripts switched off; a look-alike when the template is not available), with a timer marked "Test", and are playable: four fake players choose, you click your choice, and the roll ends when everyone has chosen or the timer runs out (no choice = pass)
+- `/whorolled test` plays a fake loot roll to check the display without a dungeon, `/whorolled test 5` five at once. The fake rolls are drawn like the game's own roll window (same size, the game's own art, stacked the same way), marked "Test", and are playable: four fake players choose, you click your choice, and the roll ends when everyone has chosen or the timer runs out (no choice = pass)
 
 ## Options
 
@@ -36,7 +36,6 @@ The same things are available as commands, `/whorolled` (or `/wroll`):
 | `/whorolled attach` | toggle the bar under the loot rolls |
 | `/whorolled source auto\|api\|chat` | where roll data comes from (`auto`: the loot history API when the client has it) |
 | `/whorolled status` | diagnostic info (client build, API present, source in use, active rolls) |
-| `/whorolled inspect` | describe the game's roll frame and the roll frame template (fields, regions, children), in the chat and in `WhoRolledDB.inspect` — to adapt the addon to the client |
 | `/whorolled debug` | print each loot event in the chat |
 | `/whorolled clear` | erase the history |
 
