@@ -602,6 +602,7 @@ local TEST_LINGER = 5    -- seconds a finished test roll stays on screen
 local WIN_W, WIN_H = 277, 67
 local SLOT_H = 100
 local TOAST = "Interface\\LootFrame\\LootToast"
+local GOLD_EDGE = "loottoast-itemborder-gold"
 local ROLL_BUTTONS = { -- choice, atlas, fallback file, label, x, y
   { "need", "lootroll-toast-icon-need", "Interface\\Buttons\\UI-GroupLoot-Dice", L.NEED, 202, -7 },
   { "greed", "lootroll-toast-icon-greed", "Interface\\Buttons\\UI-GroupLoot-Coin", L.GREED, 202, -34 },
@@ -756,7 +757,7 @@ local function GetTestFrame(i)
   return f
 end
 
--- Shows the item on a test window: icon, name and border in its quality colour.
+-- Shows the item on a test window: icon, and the name in its quality colour.
 local function ShowTestItem(f, item, link)
   f.link = link
   f.iconTex:SetTexture(TestItemIcon(item[1]))
@@ -764,11 +765,10 @@ local function ShowTestItem(f, item, link)
   local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
   local name = link:match("|h%[(.-)%]|h") or item[2]
   f.name:SetText(name)
-  if c then
-    f.name:SetTextColor(c.r, c.g, c.b)
-    f.border:SetVertexColor(c.r, c.g, c.b)
-  end
-  local atlas = LOOT_BORDER_BY_QUALITY and LOOT_BORDER_BY_QUALITY[q]
+  if c then f.name:SetTextColor(c.r, c.g, c.b) end
+  -- the game's window keeps its gold frame whatever the item: the art is left untinted, and
+  -- the icon gets the gold edge (the quality one, or none, when the client lacks it)
+  local atlas = HasAtlas(GOLD_EDGE) and GOLD_EDGE or (LOOT_BORDER_BY_QUALITY and LOOT_BORDER_BY_QUALITY[q])
   if atlas and HasAtlas(atlas) then
     f.iconBorder:SetAtlas(atlas)
     f.iconBorder:Show()
