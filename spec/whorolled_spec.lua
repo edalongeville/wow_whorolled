@@ -159,20 +159,44 @@ describe("history and commands", function()
     assert.is_truthy(ns.RC.index.k5)
   end)
 
-  it("runs the test roll to a winner", function()
+  it("waits for your choice, then picks a winner", function()
     env.SlashCmdList.WHOROLLED("test")
-    H.runTimers()
-    assert.are.equal(1, #env.WhoRolledDB.history)
+    H.runTimers() -- the other players choose
     local d = env.WhoRolledDB.history[1]
+    local f = ns.testFrames[1]
     assert.is_true(d.test)
+    assert.is_nil(d.winner) -- you have not chosen yet
+    f.buttons[1]._scripts.OnClick(f.buttons[1]) -- Need
     local r = rollsByName(d)
+    assert.are.equal("need", r.Panda.state)
+    assert.is_truthy(d.winner)
     assert.is_true(r[d.winner].winner)
     assert.are.equal("need", r[d.winner].state)
+  end)
+
+  it("ignores a second click", function()
+    env.SlashCmdList.WHOROLLED("test")
+    local f = ns.testFrames[1]
+    ns.TestChoose(f, "greed")
+    ns.TestChoose(f, "need")
+    assert.are.equal("greed", rollsByName(f.drop).Panda.state)
+  end)
+
+  it("passes for you when the timer runs out", function()
+    env.SlashCmdList.WHOROLLED("test")
+    H.runTimers()
+    local f = ns.testFrames[1]
+    f.deadline = env.GetTime() - 1
+    f._scripts.OnUpdate(f)
+    local d = f.drop
+    assert.are.equal("pass", rollsByName(d).Panda.state)
+    assert.are.equal("Célia", d.winner) -- the only need on the first test roll
   end)
 
   it("runs several test rolls at once", function()
     env.SlashCmdList.WHOROLLED("test 5")
     H.runTimers()
+    for i = 1, 5 do ns.TestTimeout(ns.testFrames[i]) end
     local h = env.WhoRolledDB.history
     assert.are.equal(5, #h)
     local items = {}
@@ -186,6 +210,15 @@ describe("history and commands", function()
     assert.are.equal(5, n) -- a different item on each roll
     assert.is_true(h[3].allPassed)
     assert.are.equal("greed", rollsByName(h[2])[h[2].winner].state)
+  end)
+
+  it("hides the finished test rolls after a while", function()
+    env.SlashCmdList.WHOROLLED("test")
+    local f = ns.testFrames[1]
+    ns.TestChoose(f, "pass")
+    H.runTimers() -- others choose, then the linger timer
+    H.runTimers()
+    assert.is_false(f:IsShown())
   end)
 
   it("clamps the number of test rolls", function()

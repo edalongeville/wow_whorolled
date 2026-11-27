@@ -10,7 +10,7 @@ The addon is still being tested.
 - A history window (`/whorolled history`): one line per item with its winner and boss, then the choices grouped by type. Hover an item for its tooltip, shift-click to link it in chat. Movable, resizable, closes with Escape; keeps the last 200 items
 - Roll data comes from the client's loot history (`C_LootHistory`). If that turns out to be empty, `/whorolled source chat` reads the loot chat messages instead, matched against the client's own localized strings (works on French and English clients)
 - The loot roll frames can be moved anywhere with `/whorolled move`, and stay there
-- `/whorolled test` plays a fake roll to check the display without a dungeon, `/whorolled test 5` five at once
+- `/whorolled test` plays a fake loot roll to check the display without a dungeon, `/whorolled test 5` five at once. The fake rolls look like loot rolls (item icon and tooltip, Need / Greed / Pass buttons, timer marked "Test") and are playable: four fake players choose, you click your choice, and the roll ends when everyone has chosen or the timer runs out (no choice = pass)
 
 ## Options
 

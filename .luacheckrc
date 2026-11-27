@@ -29,6 +29,7 @@ read_globals = {
   "GameTooltip",
   "GetAddOnMetadata",
   "GetBuildInfo",
+  "GetItemIcon",
   "GetItemInfo",
   "GetLocale",
   "GetLootRollItemLink",

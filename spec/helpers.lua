@@ -11,7 +11,8 @@ local function newFrame(name)
     __index = function(_, k)
       local m = M.FrameMethods[k]
       if m ~= nil then return m or nil end -- false: a field the frame doesn't have
-      return function() end -- any other widget method is a no-op
+      -- any other widget method (capitalised, like the game's) is a no-op; fields are nil
+      if type(k) == "string" and k:match("^%u") then return function() end end
     end,
   })
 end
@@ -40,6 +41,8 @@ M.FrameMethods = {
   GetHeight = function(self) return self._height end,
   SetSize = function(self, w, h) self._width, self._height = w, h end,
   CreateFontString = function() return newFrame() end,
+  CreateTexture = function() return newFrame() end,
+  GetSize = function(self) return self._width or nil, self._height or nil end,
   ClearAllPoints = function(self) self._points = {} end,
   SetPoint = function(self, ...)
     self._points = self._points or {}

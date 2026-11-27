@@ -490,7 +490,15 @@ local TEST_ITEMS = {
   { 159, "Refreshing Spring Water", "ffffffff" },
   { 117, "Tough Jerky", "ffffffff" },
 }
-local TEST_FRAME_H, TEST_FRAME_GAP = 60, 8
+local TEST_FRAME_GAP = 4
+local TEST_DURATION = 15 -- seconds to choose, like a real roll's timer
+local TEST_LINGER = 5    -- seconds a finished test roll stays on screen
+
+local ROLL_BUTTONS = {
+  { "need", "Interface\\Buttons\\UI-GroupLoot-Dice", L.NEED },
+  { "greed", "Interface\\Buttons\\UI-GroupLoot-Coin", L.GREED },
+  { "pass", "Interface\\Buttons\\UI-GroupLoot-Pass", L.PASS },
+}
 
 -- Item link for a test roll. The global GetItemInfo errors on the Forever client, so C_Item is
 -- tried first and every call is protected; a built link is the fallback.
@@ -506,28 +514,192 @@ local function TestItemLink(item)
   return ("|c%s|Hitem:%d::::::::1:::::::|h[%s]|h|r"):format(item[3], item[1], item[2])
 end
 
-local function GetTestFrame(i)
-  local f = testFrames[i]
-  if not f then
-    f = CreateFrame("Frame", nil, UIParent, BACKDROP_TEMPLATE)
-    f:SetSize(240, TEST_FRAME_H)
-    ApplyBackdrop(f)
-    f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.text:SetPoint("CENTER")
-    f.panel = CreatePanel(f)
-    testFrames[i] = f
+local function TestItemIcon(itemID)
+  local getters = { C_Item and C_Item.GetItemIconByID, GetItemIcon }
+  for i = 1, 2 do
+    local get = getters[i]
+    if get then
+      local ok, icon = pcall(get, itemID)
+      if ok and icon then return icon end
+    end
   end
-  return f
+  return "Interface\\Icons\\INV_Misc_QuestionMark"
 end
 
--- Who chooses what on fake roll n: varied from one roll to the next, with a winner, a tie of
--- greeds or everyone passing now and then.
+-- Same size as the game's roll frames when the client has them, so the panels look as they will
+local function TestFrameSize()
+  local real = _G.GroupLootFrame1
+  if real and real.GetSize then
+    local ok, w, h = pcall(real.GetSize, real)
+    if ok and type(w) == "number" and type(h) == "number" and w > 100 and h > 30 then return w, h end
+  end
+  return 256, 64
+end
+
+local TestChoose -- defined below
+
+local function GetTestFrame(i)
+  local f = testFrames[i]
+  if f then return f end
+  local w, h = TestFrameSize()
+  f = CreateFrame("Frame", nil, UIParent, BACKDROP_TEMPLATE)
+  f:SetSize(w, h)
+  f:SetFrameStrata("MEDIUM")
+  if f.SetBackdrop then
+    f:SetBackdrop({
+      bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+      edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
+      tile = true, tileSize = 32, edgeSize = 16,
+      insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+  end
+
+  -- item icon (tooltip on hover, shift-click links it)
+  local size = math.min(40, h - 20)
+  local icon = CreateFrame("Button", nil, f)
+  icon:SetSize(size, size)
+  icon:SetPoint("LEFT", f, "LEFT", 10, 0)
+  icon.tex = icon:CreateTexture(nil, "ARTWORK")
+  icon.tex:SetAllPoints(icon)
+  icon:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    pcall(GameTooltip.SetHyperlink, GameTooltip, f.link)
+    GameTooltip:Show()
+  end)
+  icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  icon:SetScript("OnClick", function(self, button)
+    if f.link then SetItemRef(f.link, f.link, button, self) end
+  end)
+  f.icon = icon
+
+  -- Need / Greed / Pass, as on a real roll
+  f.buttons = {}
+  for k, b in ipairs(ROLL_BUTTONS) do
+    local btn = CreateFrame("Button", nil, f)
+    btn:SetSize(26, 26)
+    btn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -10 - (#ROLL_BUTTONS - k) * 28, -8)
+    btn:SetNormalTexture(b[2] .. "-Up")
+    btn:SetPushedTexture(b[2] .. "-Down")
+    btn:SetHighlightTexture(b[2] .. "-Highlight")
+    btn:SetScript("OnClick", function() TestChoose(f, b[1]) end)
+    btn:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText(b[3])
+      GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    btn.choice = b[1]
+    f.buttons[k] = btn
+  end
+
+  f.name = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 8, 0)
+  f.name:SetPoint("RIGHT", f.buttons[1], "LEFT", -6, 0)
+  f.name:SetJustifyH("LEFT")
+  if f.name.SetWordWrap then f.name:SetWordWrap(false) end
+
+  -- the roll timer
+  local bar = CreateFrame("StatusBar", nil, f)
+  bar:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 8, 0)
+  bar:SetPoint("RIGHT", f, "RIGHT", -12, 0)
+  bar:SetHeight(10)
+  bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+  bar:SetStatusBarColor(1, 0.82, 0)
+  bar:SetMinMaxValues(0, 1)
+  bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+  bar.bg:SetAllPoints(bar)
+  bar.bg:SetColorTexture(0, 0, 0, 0.6)
+  bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  bar.text:SetPoint("CENTER")
+  bar.text:SetText(L.TEST_TAG) -- so a test roll is never mistaken for a real one
+  f.bar = bar
+
+  f:SetScript("OnUpdate", function(self)
+    if not self.deadline then return end
+    local left = self.deadline - GetTime()
+    self.bar:SetValue(math.max(0, left / TEST_DURATION))
+    if left <= 0 then ns.TestTimeout(self) end
+  end)
+
+  f.panel = CreatePanel(f)
+  testFrames[i] = f
+  return f
+end
+ns.testFrames = testFrames -- for the tests
+
+local function SetButtonsEnabled(f, enabled)
+  for _, btn in ipairs(f.buttons) do
+    if enabled then btn:Enable() else btn:Disable() end
+    local tex = btn.GetNormalTexture and btn:GetNormalTexture()
+    if tex and tex.SetDesaturated then tex:SetDesaturated(not enabled) end
+  end
+end
+
+-- the best need wins, else the best greed, else everyone passed
+local function Resolve(f)
+  local d = f.drop
+  if f.resolved then return end
+  f.resolved = true
+  f.deadline = nil
+  SetButtonsEnabled(f, false)
+  local best
+  for _, want in ipairs({ "need", "greed" }) do
+    for _, r in ipairs(d.rolls) do
+      if r.state == want then
+        r.roll = math.random(1, 100)
+        if not best or r.roll > best.roll then best = r end
+      end
+    end
+    if best then break end
+  end
+  if best then
+    best.winner = true
+    d.winner = best.name
+  else
+    d.allPassed = true
+  end
+  ns.OnDropChanged(d)
+  C_Timer.After(TEST_LINGER, function()
+    if f.drop == d then f:Hide() end
+  end)
+end
+
+local function ResolveIfDone(f)
+  for _, r in ipairs(f.drop.rolls) do
+    if (r.state or "pending") == "pending" then return end
+  end
+  Resolve(f)
+end
+
+-- Your choice on a test roll: the buttons work like the real ones.
+TestChoose = function(f, choice)
+  if f.resolved or f.mine then return end
+  f.mine = choice
+  SetButtonsEnabled(f, false)
+  RC:SetRoll(f.drop, UnitName("player"), nil, choice)
+  ns.OnDropChanged(f.drop)
+  ResolveIfDone(f)
+end
+ns.TestChoose = TestChoose
+
+-- Time is up: like a real roll, no choice means pass.
+function ns.TestTimeout(f)
+  if f.resolved then return end
+  if not f.mine then
+    f.mine = "pass"
+    RC:SetRoll(f.drop, UnitName("player"), nil, "pass")
+  end
+  Resolve(f)
+end
+
+-- What the other players choose on fake roll n: varied from one roll to the next, so a need win,
+-- a greed win and everyone passing all show up.
 local CAST = { { "Arwyn", "PALADIN" }, { "Brogar", "WARRIOR" }, { "Célia", "PRIEST" }, { "Dorn", "HUNTER" } }
 local CHOICES = {
-  { "need", "pass", "pass", "need", "greed" },
-  { "greed", "greed", "pass", "greed", "pass" },
-  { "pass", "pass", "pass", "pass", "pass" },
-  { "need", "greed", "need", "pass", "need" },
+  { "pass", "pass", "need", "greed" },
+  { "greed", "pass", "greed", "pass" },
+  { "pass", "pass", "pass", "pass" },
+  { "greed", "need", "pass", "need" },
 }
 
 local testRun = 0
@@ -540,66 +712,50 @@ function ns.RunTest(count)
   for _, f in ipairs(testFrames) do f:Hide() end
 
   local me, myClass = UnitName("player"), select(2, UnitClass("player"))
-  local players = { { me, myClass } }
-  for _, c in ipairs(CAST) do players[#players + 1] = c end
 
-  -- stack the fake frames upwards from where real rolls appear
-  local base, basePoint, baseX, baseY
+  -- stack the fake rolls upwards from where real rolls appear
+  local base, baseY
   if WhoRolledDB.settings.rollPos then
     PlaceAnchor()
-    base, basePoint, baseX, baseY = anchor, "BOTTOM", 0, 0
+    base, baseY = anchor, 0
   else
-    base, basePoint, baseX, baseY = UIParent, "BOTTOM", 0, 200
+    base, baseY = UIParent, 200
   end
 
   for i = 1, count do
     local f = GetTestFrame(i)
-    local link = TestItemLink(TEST_ITEMS[(i - 1) % #TEST_ITEMS + 1])
+    local item = TEST_ITEMS[(i - 1) % #TEST_ITEMS + 1]
+    local link = TestItemLink(item)
+    local _, h = f:GetSize()
     f:ClearAllPoints()
-    f:SetPoint("BOTTOM", base, basePoint, baseX, baseY + (i - 1) * (TEST_FRAME_H + TEST_FRAME_GAP))
-    f.text:SetText("TEST " .. i .. "  " .. link)
+    f:SetPoint("BOTTOM", base, "BOTTOM", 0, baseY + (i - 1) * ((h or 64) + TEST_FRAME_GAP))
+    f.link = link
+    f.icon.tex:SetTexture(TestItemIcon(item[1]))
+    local color, name = link:match("^|c(%x+)|H.-|h%[(.-)%]|h")
+    f.name:SetText(("|c%s%s|r"):format(color or "ffffffff", name or item[2]))
 
     local d = RC:NewDrop("test:" .. run .. ":" .. i .. ":" .. time(), link)
     d.test = true
     d.encounterName = "Test"
-    f.drop = d
-    for _, p in ipairs(players) do RC:SetRoll(d, p[1], p[2], "pending") end
+    f.drop, f.mine, f.resolved = d, nil, nil
+    RC:SetRoll(d, me, myClass, "pending")
+    for _, c in ipairs(CAST) do RC:SetRoll(d, c[1], c[2], "pending") end
+    SetButtonsEnabled(f, true)
+    local delay = 0.3 * (i - 1) -- rolls start one after the other
+    f.deadline = GetTime() + delay + TEST_DURATION
+    f.bar:SetValue(1)
     f:Show()
     ns.OnDropChanged(d)
 
     local choices = CHOICES[(i - 1) % #CHOICES + 1]
-    local delay = 0.3 * (i - 1) -- rolls start one after the other
-    for j, p in ipairs(players) do
+    for j, c in ipairs(CAST) do
       C_Timer.After(delay + 0.6 * j, function()
-        RC:SetRoll(d, p[1], nil, choices[j])
+        if f.drop ~= d or f.resolved then return end -- a newer test took the frame
+        RC:SetRoll(d, c[1], nil, choices[j])
         ns.OnDropChanged(d)
+        ResolveIfDone(f)
       end)
     end
-
-    C_Timer.After(delay + 0.6 * #players + 1, function()
-      -- the best need wins, else the best greed, else everyone passed
-      local best
-      for _, want in ipairs({ "need", "greed" }) do
-        for _, r in ipairs(d.rolls) do
-          if r.state == want then
-            r.roll = math.random(1, 100)
-            if not best or r.roll > best.roll then best = r end
-          end
-        end
-        if best then break end
-      end
-      if best then
-        best.winner = true
-        d.winner = best.name
-      else
-        d.allPassed = true
-      end
-      ns.OnDropChanged(d)
-    end)
   end
-
-  C_Timer.After(0.3 * count + 0.6 * #players + 8, function()
-    if run ~= testRun then return end -- a newer test owns the frames
-    for _, f in ipairs(testFrames) do f:Hide() end
-  end)
+  return run
 end
