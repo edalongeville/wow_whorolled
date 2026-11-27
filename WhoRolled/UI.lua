@@ -581,18 +581,39 @@ end
 ---------------------------------------------------------------------------
 ns.MAX_TEST_ROLLS = 10
 -- { item ID, name used when the client has not cached the item yet, quality colour }
+-- /whorolled test 5: one item of each quality, then a crafting material picked at random.
+-- { itemID, name until the game has the item, quality }
 local TEST_ITEMS = {
-  { 6948, L.ITEM_HEARTHSTONE, "ffffffff" },
-  { 4306, L.ITEM_SILK, "ffffffff" },
-  { 2589, L.ITEM_LINEN, "ffffffff" },
-  { 765, L.ITEM_SILVERLEAF, "ffffffff" },
-  { 2770, L.ITEM_COPPER_ORE, "ffffffff" },
-  { 118, L.ITEM_MINOR_HEALING, "ffffffff" },
-  { 2447, L.ITEM_PEACEBLOOM, "ffffffff" },
-  { 4338, L.ITEM_MAGEWEAVE, "ffffffff" },
-  { 159, L.ITEM_SPRING_WATER, "ffffffff" },
-  { 117, L.ITEM_TOUGH_JERKY, "ffffffff" },
+  { 6948, L.ITEM_HEARTHSTONE, 1 },   -- common
+  { 1121, L.ITEM_LYNX_FEET, 2 },     -- uncommon
+  { 6504, L.ITEM_WINGBLADE, 3 },     -- rare
+  { 18832, L.ITEM_BRUTALITY_BLADE, 4 }, -- epic
 }
+local CRAFT_ITEMS = {
+  { 2770, L.ITEM_COPPER_ORE, 1 },
+  { 2589, L.ITEM_LINEN, 1 },
+  { 4306, L.ITEM_SILK, 1 },
+  { 4338, L.ITEM_MAGEWEAVE, 1 },
+  { 765, L.ITEM_SILVERLEAF, 1 },
+  { 2447, L.ITEM_PEACEBLOOM, 1 },
+}
+local QUALITY_RGB = { -- used when the client has no ITEM_QUALITY_COLORS
+  [0] = { 0.62, 0.62, 0.62 }, [1] = { 1, 1, 1 }, [2] = { 0.12, 1, 0 },
+  [3] = { 0, 0.44, 0.87 }, [4] = { 0.64, 0.21, 0.93 }, [5] = { 1, 0.5, 0 },
+}
+local function QualityColor(q)
+  local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+  if c then return c.r, c.g, c.b end
+  local t = QUALITY_RGB[q] or QUALITY_RGB[1]
+  return t[1], t[2], t[3]
+end
+
+-- The i-th item of a test run: the four qualities, then a crafting material, and again.
+local function TestItem(i)
+  local k = (i - 1) % (#TEST_ITEMS + 1) + 1
+  return TEST_ITEMS[k] or CRAFT_ITEMS[math.random(#CRAFT_ITEMS)]
+end
+
 local TEST_DURATION = 15 -- seconds to choose, like a real roll's timer
 local TEST_LINGER = 5    -- seconds a finished test roll stays on screen
 
@@ -602,7 +623,6 @@ local TEST_LINGER = 5    -- seconds a finished test roll stays on screen
 local WIN_W, WIN_H = 277, 67
 local SLOT_H = 100
 local TOAST = "Interface\\LootFrame\\LootToast"
-local GOLD_EDGE = "loottoast-itemborder-gold"
 local ROLL_BUTTONS = { -- choice, atlas, fallback file, label, x, y
   { "need", "lootroll-toast-icon-need", "Interface\\Buttons\\UI-GroupLoot-Dice", L.NEED, 202, -7 },
   { "greed", "lootroll-toast-icon-greed", "Interface\\Buttons\\UI-GroupLoot-Coin", L.GREED, 202, -34 },
@@ -630,7 +650,9 @@ local function TestItemLink(item)
       if ok and link then return link end
     end
   end
-  return ("|c%s|Hitem:%d::::::::1:::::::|h[%s]|h|r"):format(item[3], item[1], item[2])
+  local r, g, b = QualityColor(item[3])
+  local hex = ("ff%02x%02x%02x"):format(r * 255, g * 255, b * 255)
+  return ("|c%s|Hitem:%d::::::::1:::::::|h[%s]|h|r"):format(hex, item[1], item[2])
 end
 
 local function TestItemIcon(itemID)
@@ -646,15 +668,6 @@ local function TestItemIcon(itemID)
 end
 
 local TestChoose -- defined below
-
-local function ItemQuality(itemID)
-  local get = C_Item and C_Item.GetItemQualityByID
-  if get then
-    local ok, q = pcall(get, itemID)
-    if ok and type(q) == "number" then return q end
-  end
-  return 1
-end
 
 -- A test roll window, drawn like the game's own with the game's art (the game's real windows
 -- are never touched). Its Need / Greed / Pass buttons play the test.
@@ -683,8 +696,8 @@ local function GetTestFrame(i)
   f.iconTex = icon:CreateTexture(nil, "ARTWORK")
   f.iconTex:SetAllPoints(icon)
   f.iconBorder = icon:CreateTexture(nil, "OVERLAY")
-  f.iconBorder:SetSize(42, 42)
-  f.iconBorder:SetPoint("CENTER", icon, "CENTER", 0, -2)
+  f.iconBorder:SetTexture("Interface\\Common\\WhiteIconFrame")
+  f.iconBorder:SetAllPoints(icon)
   icon:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     pcall(GameTooltip.SetHyperlink, GameTooltip, f.link)
@@ -757,24 +770,16 @@ local function GetTestFrame(i)
   return f
 end
 
--- Shows the item on a test window: icon, and the name in its quality colour.
+-- Shows the item on a test window: icon, then the name, the icon's edge and the window's border
+-- in the colour of its quality, like the game's.
 local function ShowTestItem(f, item, link)
   f.link = link
   f.iconTex:SetTexture(TestItemIcon(item[1]))
-  local q = ItemQuality(item[1])
-  local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
-  local name = link:match("|h%[(.-)%]|h") or item[2]
-  f.name:SetText(name)
-  if c then f.name:SetTextColor(c.r, c.g, c.b) end
-  -- the game's window keeps its gold frame whatever the item: the art is left untinted, and
-  -- the icon gets the gold edge (the quality one, or none, when the client lacks it)
-  local atlas = HasAtlas(GOLD_EDGE) and GOLD_EDGE or (LOOT_BORDER_BY_QUALITY and LOOT_BORDER_BY_QUALITY[q])
-  if atlas and HasAtlas(atlas) then
-    f.iconBorder:SetAtlas(atlas)
-    f.iconBorder:Show()
-  else
-    f.iconBorder:Hide()
-  end
+  local r, g, b = QualityColor(item[3])
+  f.name:SetText(link:match("|h%[(.-)%]|h") or item[2])
+  f.name:SetTextColor(r, g, b)
+  f.border:SetVertexColor(r, g, b)
+  f.iconBorder:SetVertexColor(r, g, b)
 end
 ns.testFrames = testFrames -- for the tests
 
@@ -875,7 +880,7 @@ function ns.RunTest(count)
 
   for i = 1, count do
     local f = GetTestFrame(i)
-    local item = TEST_ITEMS[(i - 1) % #TEST_ITEMS + 1]
+    local item = TestItem(i)
     local link = TestItemLink(item)
     -- stacked like the game's: one slot of SLOT_H each, room for the bar in between
     f:ClearAllPoints()

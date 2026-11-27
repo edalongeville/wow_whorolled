@@ -412,6 +412,17 @@ describe("options panel", function()
 end)
 
 describe("test roll window", function()
+  it("test 5 shows a common, uncommon, rare and epic item, then a crafting material", function()
+    local ns, env = H.load()
+    env.SlashCmdList.WHOROLLED("test 5")
+    local ids = {}
+    for i = 1, 5 do ids[i] = tonumber(ns.testFrames[i].link:match("item:(%d+)")) end
+    assert.are.same({ 6948, 1121, 6504, 18832 }, { ids[1], ids[2], ids[3], ids[4] })
+    local crafts = { [2770] = true, [2589] = true, [4306] = true, [4338] = true, [765] = true, [2447] = true }
+    assert.is_true(crafts[ids[5]])
+    assert.matches("^|cffa3", ns.testFrames[4].link) -- epic purple when the game has no item info
+  end)
+
   it("is drawn at the game's roll window size, with playable Need / Greed / Pass buttons", function()
     local ns, env = H.load()
     env.SlashCmdList.WHOROLLED("test")
