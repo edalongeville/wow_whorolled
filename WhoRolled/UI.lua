@@ -54,13 +54,19 @@ local BACKDROP_TEMPLATE = BackdropTemplateMixin and "BackdropTemplate" or nil
 -- Panel shown to the right of each Blizzard roll frame
 ---------------------------------------------------------------------------
 local ROW_H = 14
+local COL_W = 190
+local PAD = 6
+local MAX_COLS = 2
 local panels = {}   -- [rollFrame] = panel
 local hooked = {}   -- [rollFrame] = true
 
+-- The panel is exactly as tall as its roll frame, so stacked rolls never overlap: when the list
+-- does not fit in one column it uses a second one, and past that the rest is summed up as "+N".
 local function CreatePanel(parent)
   local p = CreateFrame("Frame", nil, parent, BACKDROP_TEMPLATE)
   p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
-  p:SetWidth(200)
+  p:SetPoint("BOTTOMLEFT", parent, "BOTTOMRIGHT", 2, 0)
+  p:SetWidth(COL_W + 2 * PAD)
   ApplyBackdrop(p)
   p.rows = {}
   return p
@@ -69,54 +75,84 @@ end
 local function GetRow(p, i)
   local row = p.rows[i]
   if not row then
-    local y = -7 - (i - 1) * ROW_H
     row = {}
     row.name = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.name:SetPoint("TOPLEFT", p, "TOPLEFT", 8, y)
-    row.name:SetWidth(110)
+    row.name:SetWidth(COL_W - 72)
     row.name:SetJustifyH("LEFT")
     if row.name.SetWordWrap then row.name:SetWordWrap(false) end
     row.choice = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.choice:SetPoint("TOPRIGHT", p, "TOPRIGHT", -8, y)
     row.choice:SetJustifyH("RIGHT")
     p.rows[i] = row
   end
   return row
 end
 
+-- Rows per column that fit in the roll frame's height (at least 1).
+local function RowsPerColumn(p)
+  local parent = p:GetParent()
+  local h = parent and parent.GetHeight and parent:GetHeight()
+  if type(h) ~= "number" or h <= 0 then h = 60 end
+  return math.max(1, math.floor((h - 2 * PAD) / ROW_H))
+end
+ns.RowsPerColumn = RowsPerColumn
+
 local function FillPanel(p, d)
-  local n, pending = 0, 0
+  -- entries: { name text, choice text, number of players it stands for }
+  local entries, pending = {}, 0
   if d then
     for _, r in ipairs(SortedRolls(d)) do
       local s = r.state or "pending"
       if s == "pending" then
         pending = pending + 1
       else
-        n = n + 1
-        local row = GetRow(p, n)
-        row.name:SetText((r.winner and (WIN_ICON .. " ") or "") .. Colored(r.name, r.class))
         local txt = STATE_COLOR[s] .. STATE_LABEL[s] .. "|r"
         if r.roll then txt = txt .. "  |cffffffff" .. r.roll .. "|r" end
-        row.choice:SetText(txt)
+        entries[#entries + 1] = { (r.winner and (WIN_ICON .. " ") or "") .. Colored(r.name, r.class), txt, 1 }
       end
     end
   end
-  if pending > 0 or n == 0 then
-    n = n + 1
-    local row = GetRow(p, n)
-    if pending > 0 then
-      row.name:SetText("|cff888888" .. L.PENDING .. " : " .. pending .. "|r")
-    else
-      row.name:SetText("|cff888888" .. L.WAITING_CHOICES .. "|r")
+  if pending > 0 then
+    entries[#entries + 1] = { "|cff888888" .. L.PENDING .. " : " .. pending .. "|r", "", pending }
+  elseif #entries == 0 then
+    entries[1] = { "|cff888888" .. L.WAITING_CHOICES .. "|r", "", 0 }
+  end
+
+  local perCol = RowsPerColumn(p)
+  local capacity = perCol * MAX_COLS
+  if #entries > capacity then
+    -- keep the first ones (winner and choices first, by sort order) and count the players left
+    local hidden = 0
+    for k = #entries, capacity, -1 do
+      hidden = hidden + entries[k][3]
+      entries[k] = nil
     end
-    row.choice:SetText("")
+    entries[capacity] = { "|cff888888+" .. hidden .. "|r", "", hidden }
   end
-  for i, row in ipairs(p.rows) do
-    if i <= n then row.name:Show(); row.choice:Show() else row.name:Hide(); row.choice:Hide() end
+
+  local cols = #entries > perCol and 2 or 1
+  for i, e in ipairs(entries) do
+    local row = GetRow(p, i)
+    local col = math.floor((i - 1) / perCol)
+    local line = (i - 1) % perCol
+    local x, y = PAD + 2 + col * COL_W, -PAD - 1 - line * ROW_H
+    row.name:ClearAllPoints()
+    row.name:SetPoint("TOPLEFT", p, "TOPLEFT", x, y)
+    row.choice:ClearAllPoints()
+    row.choice:SetPoint("TOPRIGHT", p, "TOPLEFT", x + COL_W - 8, y)
+    row.name:SetText(e[1])
+    row.choice:SetText(e[2])
+    row.name:Show()
+    row.choice:Show()
   end
-  p:SetHeight(14 + n * ROW_H)
+  for i = #entries + 1, #p.rows do
+    p.rows[i].name:Hide()
+    p.rows[i].choice:Hide()
+  end
+  p:SetWidth(cols * COL_W + 2 * PAD)
+  p.shownEntries, p.shownCols = #entries, cols -- for the tests
   p:Show()
 end
+ns.CreatePanel, ns.FillPanel = CreatePanel, FillPanel -- for the tests
 
 function ns.RefreshRollFrames()
   ns.ApplyRollPosition()
@@ -376,7 +412,7 @@ local TEST_ITEMS = {
   { 159, "Refreshing Spring Water", "ffffffff" },
   { 117, "Tough Jerky", "ffffffff" },
 }
-local TEST_FRAME_H, TEST_FRAME_GAP = 60, 6
+local TEST_FRAME_H, TEST_FRAME_GAP = 60, 8
 
 -- Item link for a test roll. The global GetItemInfo errors on the Forever client, so C_Item is
 -- tried first and every call is protected; a built link is the fallback.

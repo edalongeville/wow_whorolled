@@ -3,7 +3,10 @@
 local M = {}
 
 local function newFrame(name)
-  local f = { _scripts = {}, _events = {}, _shown = true, _name = name, _points = false, _setPointHooks = false }
+  local f = {
+    _scripts = {}, _events = {}, _shown = true, _name = name, _points = false, _setPointHooks = false,
+    _parent = false, _height = false, _width = false,
+  }
   return setmetatable(f, {
     __index = function(_, k)
       local m = M.FrameMethods[k]
@@ -32,6 +35,10 @@ M.FrameMethods = {
     if self._scripts.OnValueChanged then self._scripts.OnValueChanged(self, v) end
   end,
   GetValue = function(self) return self._value end,
+  GetParent = function(self) return self._parent end,
+  SetHeight = function(self, h) self._height = h end,
+  GetHeight = function(self) return self._height end,
+  SetSize = function(self, w, h) self._width, self._height = w, h end,
   CreateFontString = function() return newFrame() end,
   ClearAllPoints = function(self) self._points = {} end,
   SetPoint = function(self, ...)
@@ -65,8 +72,9 @@ function M.load(opts)
       table.insert(M.printed, table.concat(t, " "))
     end,
     -- frames
-    CreateFrame = function(kind, name, _, template)
+    CreateFrame = function(kind, name, parent, template)
       local f = newFrame(name)
+      f._parent = parent
       table.insert(M.created, { kind = kind, template = template, frame = f })
       f._shown = name ~= "WhoRolledHistoryFrame"
       if name then M.env[name] = f end -- named frames are globals, as in the game

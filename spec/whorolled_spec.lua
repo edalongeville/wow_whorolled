@@ -359,3 +359,54 @@ describe("options panel", function()
     assert.matches("options", H.printed[#H.printed])
   end)
 end)
+
+describe("roll panel layout", function()
+  local ns, env
+  before_each(function() ns, env = H.load() end)
+
+  local function panelFor(height, choosers, pending)
+    local parent = env.CreateFrame("Frame", nil, env.UIParent)
+    parent:SetSize(240, height)
+    local p = ns.CreatePanel(parent)
+    local d = ns.RC:NewDrop("layout" .. height .. choosers, LINK)
+    for i = 1, choosers do ns.RC:SetRoll(d, "P" .. i, "MAGE", "greed", i) end
+    for i = 1, pending or 0 do ns.RC:SetRoll(d, "W" .. i, "MAGE", "pending") end
+    ns.FillPanel(p, d)
+    return p
+  end
+
+  it("is anchored to the full height of its roll frame", function()
+    local p = panelFor(60, 1)
+    local top, _, topRel = p:GetPoint(1)
+    local bottom, _, bottomRel = p:GetPoint(2)
+    assert.are.equal("TOPLEFT", top)
+    assert.are.equal("TOPRIGHT", topRel)
+    assert.are.equal("BOTTOMLEFT", bottom)
+    assert.are.equal("BOTTOMRIGHT", bottomRel)
+  end)
+
+  it("uses one column when the list fits", function()
+    local p = panelFor(84, 4) -- 5 rows fit in 84 px
+    assert.are.equal(5, ns.RowsPerColumn(p))
+    assert.are.equal(1, p.shownCols)
+    assert.are.equal(4, p.shownEntries)
+  end)
+
+  it("uses a second column for a 5-man group on a 60 px frame", function()
+    local p = panelFor(60, 5) -- 3 rows fit
+    assert.are.equal(2, p.shownCols)
+    assert.are.equal(5, p.shownEntries)
+  end)
+
+  it("sums up what does not fit as +N", function()
+    local p = panelFor(60, 10, 5) -- 10 choices + 5 pending, room for 6 lines
+    assert.are.equal(6, p.shownEntries)
+    assert.matches("+10", p.rows[6].name:GetText(), 1, true) -- 5 hidden choices + 5 pending
+  end)
+
+  it("runs test rolls with the new layout", function()
+    env.SlashCmdList.WHOROLLED("test 2")
+    H.runTimers()
+    assert.are.equal(2, #env.WhoRolledDB.history)
+  end)
+end)
