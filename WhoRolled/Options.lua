@@ -99,13 +99,19 @@ local function Build()
     end
   end)
   Button(L.OPT_RESET_POS, 224, 160, function() ns.ResetRollPosition() end)
-  Button(L.OPT_TEST, 392, 140, function()
-    CloseSettings()
-    ns.RunTest()
-  end)
   controls[#controls + 1] = function()
     moveButton:SetText(ns.IsMoving() and L.OPT_LOCK or L.OPT_MOVE)
   end
+  y = y - 30
+  -- on their own row: four buttons do not fit the width of the Settings panel
+  Button(L.OPT_TEST, 16, 200, function()
+    CloseSettings()
+    ns.RunTest(1)
+  end)
+  Button(L.OPT_TEST_5, 224, 160, function()
+    CloseSettings()
+    ns.RunTest(5)
+  end)
   y = y - 32
 
   -- History

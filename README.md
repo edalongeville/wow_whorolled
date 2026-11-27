@@ -14,7 +14,7 @@ The addon is still being tested.
 
 ## Options
 
-Everything is in an options page: **Options -> AddOns -> WhoRolled**, `/whorolled`, or the game's add-on menu (the numbered icon by the minimap: left click for the options, right click for the history). It has the panel toggle, Move / Reset position / Test roll buttons, the history (open, number of items kept, clear), the roll data source and debug messages.
+Everything is in an options page: **Options -> AddOns -> WhoRolled**, `/whorolled`, or the game's add-on menu (the numbered icon by the minimap: left click for the options, right click for the history). It has the panel toggle, Move / Reset position / Test roll / Test roll x5 buttons, the history (open, number of items kept, clear), the roll data source and debug messages.
 
 ## Commands
 

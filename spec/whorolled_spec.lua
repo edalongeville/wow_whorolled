@@ -352,6 +352,17 @@ describe("options panel", function()
     assert.is_false(ns.IsMoving())
   end)
 
+  it("test buttons play one and five rolls", function()
+    ns.OpenOptions()
+    -- buttons in creation order: move, reset position, test, test x5, history, clear
+    local b = H.widgets("UIPanelButtonTemplate")
+    assert.are.equal("Jet de test x5", b[4]:GetText())
+    b[3]._scripts.OnClick(b[3])
+    assert.are.equal(1, #env.WhoRolledDB.history)
+    b[4]._scripts.OnClick(b[4])
+    assert.are.equal(6, #env.WhoRolledDB.history)
+  end)
+
   it("says so when the client has no Settings panel", function()
     ns, env = H.load({ noSettings = true })
     env.SlashCmdList.WHOROLLED("")
