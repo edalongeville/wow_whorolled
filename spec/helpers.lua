@@ -25,6 +25,13 @@ M.FrameMethods = {
   IsShown = function(self) return self._shown end,
   SetText = function(self, t) self._text = t end,
   GetText = function(self) return self._text end,
+  SetChecked = function(self, v) self._checked = v and true or false end,
+  GetChecked = function(self) return self._checked end,
+  SetValue = function(self, v)
+    self._value = v
+    if self._scripts.OnValueChanged then self._scripts.OnValueChanged(self, v) end
+  end,
+  GetValue = function(self) return self._value end,
   CreateFontString = function() return newFrame() end,
   ClearAllPoints = function(self) self._points = {} end,
   SetPoint = function(self, ...)
@@ -58,8 +65,9 @@ function M.load(opts)
       table.insert(M.printed, table.concat(t, " "))
     end,
     -- frames
-    CreateFrame = function(_, name)
+    CreateFrame = function(kind, name, _, template)
       local f = newFrame(name)
+      table.insert(M.created, { kind = kind, template = template, frame = f })
       f._shown = name ~= "WhoRolledHistoryFrame"
       if name then M.env[name] = f end -- named frames are globals, as in the game
       return f
@@ -73,6 +81,15 @@ function M.load(opts)
     end,
     GameTooltip = newFrame("GameTooltip"),
     UISpecialFrames = {},
+    Settings = opts.noSettings and {} or {
+      RegisterCanvasLayoutCategory = function(panel, name)
+        local cat = { panel = panel, name = name, GetID = function() return 42 end }
+        M.category = cat
+        return cat
+      end,
+      RegisterAddOnCategory = function() end,
+      OpenToCategory = function(id) M.opened = id; M.category.panel._scripts.OnShow(M.category.panel) end,
+    },
     C_Timer = { After = function(sec, fn) table.insert(M.timers, { sec, fn }) end },
     -- game
     GetLocale = function() return opts.locale or "frFR" end,
@@ -107,7 +124,9 @@ function M.load(opts)
   setmetatable(env, { __index = _G })
 
   local ns = {}
-  for _, file in ipairs({ "Locales.lua", "Core.lua", "UI.lua" }) do
+  M.category, M.opened = nil, nil
+  M.created = {}
+  for _, file in ipairs({ "Locales.lua", "Core.lua", "UI.lua", "Options.lua" }) do
     local chunk = assert(loadfile("WhoRolled/" .. file))
     setfenv(chunk, env)
     chunk("WhoRolled", ns)
@@ -116,6 +135,15 @@ function M.load(opts)
   M.fire("ADDON_LOADED", "WhoRolled")
   M.fire("PLAYER_LOGIN")
   return ns, env
+end
+
+-- Frames created with a template, in creation order (the options widgets).
+function M.widgets(template)
+  local t = {}
+  for _, c in ipairs(M.created) do
+    if c.template == template then t[#t + 1] = c.frame end
+  end
+  return t
 end
 
 function M.fire(event, ...)

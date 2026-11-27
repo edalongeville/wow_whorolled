@@ -10,12 +10,15 @@ globals = {
   "SLASH_WHOROLLED1",
   "SLASH_WHOROLLED2",
   "UISpecialFrames", -- the history window is added so Escape closes it
+  "StaticPopupDialogs", -- the "clear the history?" confirmation
+  "WhoRolled_OnAddonCompartmentClick", -- ## AddonCompartmentFunc in the .toc
 }
 
 -- WoW API and global strings used (read only).
 read_globals = {
   "Ambiguate",
   "BackdropTemplateMixin",
+  "C_AddOns",
   "C_Item",
   "C_LootHistory",
   "C_Timer",
@@ -24,6 +27,7 @@ read_globals = {
   "Enum",
   "GameFontHighlightSmall",
   "GameTooltip",
+  "GetAddOnMetadata",
   "GetBuildInfo",
   "GetItemInfo",
   "GetLocale",
@@ -31,6 +35,11 @@ read_globals = {
   "GetNumGroupMembers",
   "GetTime",
   "GREED",
+  "HideUIPanel",
+  "NO",
+  "Settings",
+  "StaticPopup_Show",
+  "YES",
   "hooksecurefunc",
   "IsInRaid",
   "NEED",

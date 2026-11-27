@@ -182,7 +182,8 @@ describe("history and commands", function()
 
   it("opens the history window and renders lines", function()
     ns.RC:NewDrop("k", LINK)
-    env.SlashCmdList.WHOROLLED("")
+    env.SlashCmdList.WHOROLLED("history")
+    assert.is_true(env.WhoRolledHistoryFrame:IsShown())
     assert.has_no.errors(function() ns.RenderHistory() end)
   end)
 
@@ -250,5 +251,82 @@ describe("moving the roll frames", function()
     dragAnchorTo(0, 0)
     env.SlashCmdList.WHOROLLED("reset")
     assert.is_nil(env.WhoRolledDB.settings.rollPos)
+  end)
+end)
+
+describe("options panel", function()
+  local ns, env
+  before_each(function() ns, env = H.load() end)
+
+  -- checkboxes in creation order: attach, auto, api, chat, debug
+  local function boxes() return H.widgets("UICheckButtonTemplate") end
+  local function click(cb, checked)
+    cb:SetChecked(checked)
+    cb._scripts.OnClick(cb)
+  end
+
+  it("registers a WhoRolled category and opens it from the add-on menu", function()
+    assert.are.equal("WhoRolled", H.category.name)
+    env.WhoRolled_OnAddonCompartmentClick("WhoRolled", "LeftButton")
+    assert.are.equal(42, H.opened)
+  end)
+
+  it("opens the history on a right click in the add-on menu", function()
+    env.WhoRolled_OnAddonCompartmentClick("WhoRolled", "RightButton")
+    assert.is_nil(H.opened)
+    assert.is_true(env.WhoRolledHistoryFrame:IsShown())
+  end)
+
+  it("/whorolled opens the options", function()
+    env.SlashCmdList.WHOROLLED("")
+    assert.are.equal(42, H.opened)
+  end)
+
+  it("shows the saved settings when opened", function()
+    env.WhoRolledDB.settings.attach = false
+    env.WhoRolledDB.settings.source = "chat"
+    ns.OpenOptions()
+    local b = boxes()
+    assert.are.equal(5, #b)
+    assert.is_false(b[1]:GetChecked())
+    assert.is_false(b[2]:GetChecked())
+    assert.is_true(b[4]:GetChecked())
+  end)
+
+  it("changes settings from the checkboxes", function()
+    ns.OpenOptions()
+    local b = boxes()
+    click(b[1], false)
+    assert.is_false(env.WhoRolledDB.settings.attach)
+    click(b[3], true)
+    assert.are.equal("api", env.WhoRolledDB.settings.source)
+    assert.is_false(b[2]:GetChecked()) -- radio behaviour
+    click(b[5], true)
+    assert.is_true(env.WhoRolledDB.settings.debug)
+  end)
+
+  it("trims the history from the slider", function()
+    for i = 1, 120 do ns.RC:NewDrop("k" .. i, LINK) end
+    ns.OpenOptions()
+    local slider = H.widgets("OptionsSliderTemplate")[1]
+    slider:SetValue(52) -- snapped to 50
+    assert.are.equal(50, env.WhoRolledDB.settings.maxHistory)
+    assert.are.equal(50, #env.WhoRolledDB.history)
+  end)
+
+  it("move button unlocks then locks the anchor", function()
+    ns.OpenOptions()
+    local move = H.widgets("UIPanelButtonTemplate")[1]
+    move._scripts.OnClick(move)
+    assert.is_true(ns.IsMoving())
+    move._scripts.OnClick(move)
+    assert.is_false(ns.IsMoving())
+  end)
+
+  it("says so when the client has no Settings panel", function()
+    ns, env = H.load({ noSettings = true })
+    env.SlashCmdList.WHOROLLED("")
+    assert.is_nil(H.opened)
+    assert.matches("options", H.printed[#H.printed])
   end)
 end)

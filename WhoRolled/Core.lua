@@ -317,6 +317,7 @@ local function OnEvent(self, event, ...)
     BuildStateMap()
     BuildChatPatterns()
     if ns.ApplyRollPosition then ns.ApplyRollPosition() end
+    if ns.BuildOptions then ns.BuildOptions() end
     self:RegisterEvent("START_LOOT_ROLL")
     self:RegisterEvent("CANCEL_LOOT_ROLL")
     self:RegisterEvent("CHAT_MSG_LOOT")
@@ -372,6 +373,53 @@ RC:RegisterEvent("ADDON_LOADED")
 RC:RegisterEvent("PLAYER_LOGIN")
 
 ---------------------------------------------------------------------------
+-- Settings changes, shared by the slash commands and the options panel
+---------------------------------------------------------------------------
+function ns.SetDebug(v)
+  WhoRolledDB.settings.debug = v and true or false
+  Print(L.DEBUG:format(v and L.ON or L.OFF))
+end
+
+function ns.SetAttach(v)
+  WhoRolledDB.settings.attach = v and true or false
+  Print(L.ATTACH:format(v and L.ON or L.OFF))
+  ns.RefreshRollFrames()
+end
+
+function ns.SetSource(v)
+  WhoRolledDB.settings.source = v
+  Print(L.SOURCE:format(v, RC:UseAPI() and "api" or "chat"))
+end
+
+function ns.SetMaxHistory(n)
+  local s = WhoRolledDB.settings
+  s.maxHistory = n
+  local h = WhoRolledDB.history
+  while #h > n do
+    local old = table.remove(h, 1)
+    RC.index[old.key] = nil
+  end
+  ns.RenderHistory()
+end
+
+function ns.ClearHistory()
+  wipe(WhoRolledDB.history)
+  wipe(RC.index)
+  Print(L.CLEARED)
+  ns.RenderHistory()
+end
+
+-- Opened from the game's add-on menu (the numbered icon by the minimap): `## AddonCompartmentFunc`
+-- in the .toc names this global. Left click: options; right click: history.
+function WhoRolled_OnAddonCompartmentClick(_, button)
+  if button == "RightButton" then
+    ns.ToggleHistory()
+  else
+    ns.OpenOptions()
+  end
+end
+
+---------------------------------------------------------------------------
 -- Slash commands
 ---------------------------------------------------------------------------
 SLASH_WHOROLLED1 = "/whorolled"
@@ -380,29 +428,28 @@ SlashCmdList.WHOROLLED = function(msg)
   local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
   local s = WhoRolledDB.settings
 
-  if cmd == "" then
+  if cmd == "" or cmd == "options" or cmd == "config" then
+    ns.OpenOptions()
+  elseif cmd == "history" then
     ns.ToggleHistory()
   elseif cmd == "test" then
     ns.RunTest()
   elseif cmd == "debug" then
-    s.debug = not s.debug
-    Print(L.DEBUG:format(s.debug and L.ON or L.OFF))
+    ns.SetDebug(not s.debug)
   elseif cmd == "move" then
     ns.ToggleMove()
   elseif cmd == "reset" then
     ns.ResetRollPosition()
   elseif cmd == "attach" then
-    s.attach = not s.attach
-    Print(L.ATTACH:format(s.attach and L.ON or L.OFF))
-    ns.RefreshRollFrames()
+    ns.SetAttach(not s.attach)
   elseif cmd == "clear" then
-    wipe(WhoRolledDB.history)
-    wipe(RC.index)
-    Print(L.CLEARED)
-    ns.RenderHistory()
+    ns.ClearHistory()
   elseif cmd == "source" then
-    if arg == "auto" or arg == "api" or arg == "chat" then s.source = arg end
-    Print(L.SOURCE:format(s.source, RC:UseAPI() and "api" or "chat"))
+    if arg == "auto" or arg == "api" or arg == "chat" then
+      ns.SetSource(arg)
+    else
+      Print(L.SOURCE:format(s.source, RC:UseAPI() and "api" or "chat"))
+    end
   elseif cmd == "status" then
     local _, build, _, iface = GetBuildInfo()
     Print("build", build, "interface", iface)

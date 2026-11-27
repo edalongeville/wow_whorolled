@@ -155,7 +155,7 @@ end
 
 local function CreateAnchor()
   anchor = CreateFrame("Frame", "WhoRolledRollAnchor", UIParent, BACKDROP_TEMPLATE)
-  anchor:SetSize(260, 40)
+  anchor:SetSize(280, 44)
   anchor:SetFrameStrata("DIALOG")
   anchor:SetMovable(true)
   anchor:SetClampedToScreen(true)
@@ -166,6 +166,10 @@ local function CreateAnchor()
   anchor.text = anchor:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   anchor.text:SetPoint("CENTER")
   anchor.text:SetText(L.MOVE_LABEL)
+  -- close button = lock, so nothing has to be typed
+  local close = CreateFrame("Button", nil, anchor, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 2, 2)
+  close:SetScript("OnClick", function() ns.ToggleMove() end)
   anchor:SetScript("OnDragStart", anchor.StartMoving)
   anchor:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
@@ -209,6 +213,10 @@ function ns.ApplyRollPosition()
     hookedRoot = root
   end
   Pin(root)
+end
+
+function ns.IsMoving()
+  return anchor ~= nil and anchor:IsShown()
 end
 
 function ns.ToggleMove()

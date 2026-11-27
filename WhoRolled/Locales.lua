@@ -21,13 +21,35 @@ L.ON = "on"
 L.OFF = "off"
 L.SOURCE = "Data source: %s (in use: %s)"
 L.ATTACH = "Panels next to roll frames: %s"
-L.MOVE_LABEL = "WhoRolled – loot rolls\nDrag me, then /whorolled move"
-L.MOVE_UNLOCKED = "Drag the green box to place the loot rolls, then type /whorolled move again to lock."
+L.MOVE_LABEL = "WhoRolled – loot rolls\nDrag me, then close (X) to lock"
+L.MOVE_UNLOCKED = "Drag the green box to place the loot rolls, then close it (X) to lock."
 L.MOVE_LOCKED = "Loot roll position locked."
 L.MOVE_RESET = "Loot roll position reset: /reload to give them back to the game."
+L.OPT_INTRO = "Shows who chose Need, Greed or Pass on each loot roll. Also in the add-on menu by the minimap "
+  .. "(left click: options, right click: history)."
+L.OPT_DISPLAY = "Display"
+L.OPT_ATTACH = "Show a panel next to each loot roll"
+L.OPT_MOVE = "Move the loot rolls"
+L.OPT_LOCK = "Lock the loot rolls"
+L.OPT_RESET_POS = "Reset position"
+L.OPT_TEST = "Test roll"
+L.OPT_HISTORY = "History"
+L.OPT_OPEN_HISTORY = "Open the history"
+L.OPT_MAX_HISTORY = "Items kept"
+L.OPT_CLEAR = "Clear the history"
+L.OPT_CLEAR_CONFIRM = "Erase the WhoRolled roll history?"
+L.OPT_DATA = "Roll data"
+L.OPT_SOURCE_AUTO = "Automatic (recommended)"
+L.OPT_SOURCE_API = "Loot history (C_LootHistory)"
+L.OPT_SOURCE_CHAT = "Loot chat messages"
+L.OPT_IN_USE = "In use: %s"
+L.OPT_DEBUG = "Print debug messages in the chat"
+L.OPT_UNAVAILABLE = "The options panel is not available on this client: use /whorolled help"
+L.OPT_COMBAT = "Could not open the options (in combat?): try again out of combat"
 L.HELP = {
-  "/whorolled – show or hide the history",
-  "/whorolled move – move the loot roll frames (again to lock)",
+  "/whorolled – open the options",
+  "/whorolled history – show or hide the history",
+  "/whorolled move – move the loot roll frames",
   "/whorolled reset – give the loot roll position back to the game",
   "/whorolled test – play a fake roll to check the display",
   "/whorolled attach – toggle panels next to roll frames",
@@ -50,14 +72,35 @@ if GetLocale() == "frFR" then
   L.OFF = "désactivés"
   L.SOURCE = "Source des données : %s (utilisée : %s)"
   L.ATTACH = "Panneaux à côté des jets : %s"
-  L.MOVE_LABEL = "WhoRolled – jets de butin\nDéplacez-moi, puis /whorolled move"
-  L.MOVE_UNLOCKED = "Déplacez le cadre vert pour placer les jets de butin, "
-    .. "puis retapez /whorolled move pour verrouiller."
+  L.MOVE_LABEL = "WhoRolled – jets de butin\nDéplacez-moi, puis fermez (X) pour verrouiller"
+  L.MOVE_UNLOCKED = "Déplacez le cadre vert pour placer les jets de butin, puis fermez-le (X) pour verrouiller."
   L.MOVE_LOCKED = "Position des jets de butin verrouillée."
   L.MOVE_RESET = "Position des jets de butin réinitialisée : /reload pour la rendre au jeu."
+  L.OPT_INTRO = "Affiche qui a choisi Besoin, Cupidité ou Passer sur chaque jet de butin. Aussi dans le menu "
+    .. "des add-ons près de la minicarte (clic gauche : options, clic droit : historique)."
+  L.OPT_DISPLAY = "Affichage"
+  L.OPT_ATTACH = "Afficher un panneau à côté de chaque jet de butin"
+  L.OPT_MOVE = "Déplacer les jets de butin"
+  L.OPT_LOCK = "Verrouiller les jets de butin"
+  L.OPT_RESET_POS = "Position par défaut"
+  L.OPT_TEST = "Jet de test"
+  L.OPT_HISTORY = "Historique"
+  L.OPT_OPEN_HISTORY = "Ouvrir l'historique"
+  L.OPT_MAX_HISTORY = "Objets conservés"
+  L.OPT_CLEAR = "Effacer l'historique"
+  L.OPT_CLEAR_CONFIRM = "Effacer l'historique des jets de WhoRolled ?"
+  L.OPT_DATA = "Données des jets"
+  L.OPT_SOURCE_AUTO = "Automatique (recommandé)"
+  L.OPT_SOURCE_API = "Historique du butin (C_LootHistory)"
+  L.OPT_SOURCE_CHAT = "Messages de butin du chat"
+  L.OPT_IN_USE = "Utilisée : %s"
+  L.OPT_DEBUG = "Afficher les messages de débogage dans le chat"
+  L.OPT_UNAVAILABLE = "Le panneau d'options n'est pas disponible sur ce client : utilisez /whorolled help"
+  L.OPT_COMBAT = "Impossible d'ouvrir les options (en combat ?) : réessayez hors combat"
   L.HELP = {
-    "/whorolled – afficher ou masquer l'historique",
-    "/whorolled move – déplacer les jets de butin (une 2e fois pour verrouiller)",
+    "/whorolled – ouvrir les options",
+    "/whorolled history – afficher ou masquer l'historique",
+    "/whorolled move – déplacer les jets de butin",
     "/whorolled reset – rendre la position des jets de butin au jeu",
     "/whorolled test – simuler un jet pour vérifier l'affichage",
     "/whorolled attach – activer/désactiver les panneaux à côté des jets",

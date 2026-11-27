@@ -7,20 +7,25 @@ The addon is still being tested.
 ## Features
 
 - A panel to the right of each loot roll frame: every player in their class colour with their choice (Besoin / Cupidité / Passer, or Need / Greed / Pass on an English client), their roll once it is known, a check mark on the winner, and how many players have not chosen yet
-- A history window (`/whorolled`): one line per item with its winner and boss, then the choices grouped by type. Hover an item for its tooltip, shift-click to link it in chat. Movable, resizable, closes with Escape; keeps the last 200 items
+- A history window (`/whorolled history`): one line per item with its winner and boss, then the choices grouped by type. Hover an item for its tooltip, shift-click to link it in chat. Movable, resizable, closes with Escape; keeps the last 200 items
 - Roll data comes from the client's loot history (`C_LootHistory`). If that turns out to be empty, `/whorolled source chat` reads the loot chat messages instead, matched against the client's own localized strings (works on French and English clients)
 - The loot roll frames can be moved anywhere with `/whorolled move`, and stay there
 - `/whorolled test` plays a fake roll to check the display without a dungeon
 
+## Options
+
+Everything is in an options page: **Options -> AddOns -> WhoRolled**, `/whorolled`, or the game's add-on menu (the numbered icon by the minimap: left click for the options, right click for the history). It has the panel toggle, Move / Reset position / Test roll buttons, the history (open, number of items kept, clear), the roll data source and debug messages.
+
 ## Commands
 
-`/whorolled` (or `/wroll`):
+The same things are available as commands, `/whorolled` (or `/wroll`):
 
 | Command | Effect |
 |---|---|
-| `/whorolled` | show or hide the history |
+| `/whorolled` | open the options |
+| `/whorolled history` | show or hide the history |
 | `/whorolled test` | play a fake roll |
-| `/whorolled move` | show a green anchor to drag the loot roll frames (and their panels) anywhere; again to lock. The position is saved |
+| `/whorolled move` | show a green anchor to drag the loot roll frames (and their panels) anywhere; close it (X) to lock. The position is saved |
 | `/whorolled reset` | give the loot roll position back to the game (after a `/reload`) |
 | `/whorolled attach` | toggle the panels next to roll frames |
 | `/whorolled source auto\|api\|chat` | where roll data comes from (`auto`: the loot history API when the client has it) |
@@ -32,7 +37,7 @@ The addon is still being tested.
 
 | Path | Content |
 |---|---|
-| `WhoRolled/` | the addon: `Locales.lua` (strings), `Core.lua` (data, events, chat parsing, slash commands), `UI.lua` (roll frame panels, history window, test mode), `.toc` |
+| `WhoRolled/` | the addon: `Locales.lua` (strings), `Core.lua` (data, events, chat parsing, slash commands), `UI.lua` (roll frame panels, roll position, history window, test mode), `Options.lua` (options page), `.toc` |
 | `spec/` | [busted](https://lunarmodules.github.io/busted/) tests, run against a stubbed WoW API (`spec/helpers.lua`) |
 | `tools/` | `check.sh`, the same checks as the CI |
 | `.luacheckrc` | luacheck configuration (Lua 5.1, WoW globals) |
