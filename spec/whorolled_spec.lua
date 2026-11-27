@@ -136,6 +136,11 @@ describe("chat source", function()
     assert.is_true(ns.RC:DropForRoll(8).allPassed)
   end)
 
+  it("survives GetLootRollItemLink erroring", function()
+    env.GetLootRollItemLink = function() error("attempt to call a nil value") end
+    assert.has_no.errors(function() H.fire("START_LOOT_ROLL", 9, 60) end)
+  end)
+
   it("ignores ordinary loot lines", function()
     H.fire("CHAT_MSG_LOOT", "Panda reçoit le butin : " .. LINK)
     assert.are.equal(0, #env.WhoRolledDB.history)
@@ -160,6 +165,19 @@ describe("history and commands", function()
     local d = env.WhoRolledDB.history[1]
     assert.is_true(d.test)
     assert.are.equal("Dorn", d.winner)
+  end)
+
+  it("runs the test roll when GetItemInfo errors (Forever client)", function()
+    env.GetItemInfo = function() error("attempt to call a nil value") end
+    assert.has_no.errors(function() env.SlashCmdList.WHOROLLED("test") end)
+    assert.matches("item:6948", env.WhoRolledDB.history[1].link, 1, true)
+  end)
+
+  it("uses C_Item.GetItemInfo when present", function()
+    local real = "|cffffffff|Hitem:6948:real|h[Pierre de foyer]|h|r"
+    env.C_Item = { GetItemInfo = function() return "Pierre de foyer", real end }
+    env.SlashCmdList.WHOROLLED("test")
+    assert.are.equal(real, env.WhoRolledDB.history[1].link)
   end)
 
   it("opens the history window and renders lines", function()

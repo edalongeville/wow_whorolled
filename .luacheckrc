@@ -16,6 +16,7 @@ globals = {
 read_globals = {
   "Ambiguate",
   "BackdropTemplateMixin",
+  "C_Item",
   "C_LootHistory",
   "C_Timer",
   "CreateFrame",

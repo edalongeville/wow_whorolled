@@ -263,9 +263,22 @@ end
 ---------------------------------------------------------------------------
 -- Test mode: a fake roll frame that fills up over a few seconds
 ---------------------------------------------------------------------------
+-- Item link of the Hearthstone for the test roll. The global GetItemInfo errors on the Forever
+-- client, so C_Item is tried first and every call is protected; a built link is the fallback.
+local function TestItemLink()
+  local getters = { C_Item and C_Item.GetItemInfo, GetItemInfo }
+  for i = 1, 2 do
+    local get = getters[i]
+    if get then
+      local ok, _, link = pcall(get, 6948)
+      if ok and link then return link end
+    end
+  end
+  return "|cffffffff|Hitem:6948::::::::1:::::::|h[Hearthstone]|h|r"
+end
+
 function ns.RunTest()
-  local _, link = GetItemInfo(6948)
-  link = link or "|cffffffff|Hitem:6948::::::::1:::::::|h[Hearthstone]|h|r"
+  local link = TestItemLink()
 
   if not testFrame then
     testFrame = CreateFrame("Frame", nil, UIParent, BACKDROP_TEMPLATE)

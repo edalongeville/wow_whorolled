@@ -325,7 +325,12 @@ local function OnEvent(self, event, ...)
 
   elseif event == "START_LOOT_ROLL" then
     local rollID = ...
-    local link = GetLootRollItemLink(rollID)
+    -- protected: some legacy globals error on the Forever client (GetItemInfo does)
+    local ok, link = pcall(GetLootRollItemLink, rollID)
+    if not ok then
+      Debug("GetLootRollItemLink failed:", link)
+      link = nil
+    end
     local a = { link = link, itemID = ItemID(link), start = GetTime() }
     self.active[rollID] = a
     local d = a.itemID and self:FindUnlinkedDrop(a.itemID)
