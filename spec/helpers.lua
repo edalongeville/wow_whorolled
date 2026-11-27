@@ -27,7 +27,11 @@ M.FrameMethods = {
   end,
   GetScript = function(self, n) return self._scripts[n] end,
   Show = function(self) self._shown = true end,
-  Hide = function(self) self._shown = false end,
+  Hide = function(self)
+    local was = self._shown
+    self._shown = false
+    if was and self._scripts.OnHide then self._scripts.OnHide(self) end
+  end,
   SetShown = function(self, v) self._shown = v and true or false end,
   IsShown = function(self) return self._shown end,
   SetText = function(self, t) self._text = t end,

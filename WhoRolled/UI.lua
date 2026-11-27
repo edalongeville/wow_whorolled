@@ -669,6 +669,39 @@ end
 
 local TestChoose -- defined below
 
+local SLIDE_SPEED = 400 -- pixels per second
+local restacking = false -- a new test run is hiding the old windows: nothing to slide
+
+local function PlaceAt(f, y)
+  f.y = y
+  f:ClearAllPoints()
+  f:SetPoint("CENTER", f.base, "BOTTOM", 0, y)
+end
+
+local function SlotY(f, slot)
+  return f.baseY + SLOT_H * (slot - 0.5)
+end
+
+-- Moves a window one frame's worth towards its slot.
+function ns.SlideStep(f, elapsed)
+  local step = SLIDE_SPEED * elapsed
+  local gap = f.targetY - f.y
+  if math.abs(gap) <= step then PlaceAt(f, f.targetY) else PlaceAt(f, f.y + (gap > 0 and step or -step)) end
+end
+
+-- The test windows still up take the lowest slots, in the order they came, and slide there.
+function ns.RestackTests()
+  local up = {}
+  for _, f in ipairs(testFrames) do
+    if f:IsShown() and f.slot then up[#up + 1] = f end
+  end
+  table.sort(up, function(a, b) return a.slot < b.slot end)
+  for k, f in ipairs(up) do
+    f.slot = k
+    f.targetY = SlotY(f, k)
+  end
+end
+
 -- A test roll window, drawn like the game's own with the game's art (the game's real windows
 -- are never touched). Its Need / Greed / Pass buttons play the test.
 local function GetTestFrame(i)
@@ -759,12 +792,15 @@ local function GetTestFrame(i)
   tag:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 4)
   tag:SetText(L.TEST_TAG)
 
-  f:SetScript("OnUpdate", function(self)
+  f:SetScript("OnUpdate", function(self, elapsed)
+    if self.targetY and self.y ~= self.targetY then ns.SlideStep(self, elapsed or 0) end
     if not self.deadline then return end
     local left = self.deadline - GetTime()
     self.bar:SetValue(math.max(0, left / TEST_DURATION))
     if left <= 0 then ns.TestTimeout(self) end
   end)
+  -- a finished roll leaves: the ones above slide down into the free slots
+  f:HookScript("OnHide", function() if not restacking then ns.RestackTests() end end)
 
   testFrames[i] = f
   return f
@@ -815,7 +851,9 @@ local function Resolve(f)
     d.allPassed = true
   end
   ns.OnDropChanged(d)
-  C_Timer.After(TEST_LINGER, function()
+  -- leaves with its bar, so the slot frees up all at once
+  local linger = WhoRolledDB.settings.attach and WhoRolledDB.settings.resultTime or TEST_LINGER
+  C_Timer.After(linger, function()
     if f.drop == d then f:Hide() end
   end)
 end
@@ -865,7 +903,12 @@ function ns.RunTest(count)
   testRun = testRun + 1
   local run = testRun
 
-  for _, f in ipairs(testFrames) do f:Hide() end
+  restacking = true
+  for _, f in ipairs(testFrames) do
+    f:Hide()
+    f.slot = nil
+  end
+  restacking = false
 
   local me, myClass = UnitName("player"), select(2, UnitClass("player"))
 
@@ -883,8 +926,9 @@ function ns.RunTest(count)
     local item = TestItem(i)
     local link = TestItemLink(item)
     -- stacked like the game's: one slot of SLOT_H each, room for the bar in between
-    f:ClearAllPoints()
-    f:SetPoint("CENTER", base, "BOTTOM", 0, baseY + SLOT_H * (i - 0.5))
+    f.base, f.baseY, f.slot = base, baseY, i
+    PlaceAt(f, SlotY(f, i))
+    f.targetY = f.y
     ShowTestItem(f, item, link)
 
     local d = RC:NewDrop("test:" .. run .. ":" .. i .. ":" .. time(), link)

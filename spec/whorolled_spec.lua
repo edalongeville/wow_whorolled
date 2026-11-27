@@ -412,6 +412,24 @@ describe("options panel", function()
 end)
 
 describe("test roll window", function()
+  it("slides the windows above down into the slots freed below", function()
+    local ns, env = H.load()
+    env.SlashCmdList.WHOROLLED("test 5")
+    local f = ns.testFrames
+    local y2, y3 = f[2].y, f[3].y
+    f[2]:Hide()
+    f[3]:Hide()
+    assert.are.equal(y2, f[4].targetY)
+    assert.are.equal(y3, f[5].targetY)
+    assert.are.equal(f[1].y, f[1].targetY) -- the one below stays put
+    for _ = 1, 100 do
+      f[4]._scripts.OnUpdate(f[4], 0.05)
+      f[5]._scripts.OnUpdate(f[5], 0.05)
+    end
+    assert.are.equal(y2, f[4].y)
+    assert.are.equal(y3, select(5, f[5]:GetPoint(1)))
+  end)
+
   it("test 5 shows a common, uncommon, rare and epic item, then a crafting material", function()
     local ns, env = H.load()
     env.SlashCmdList.WHOROLLED("test 5")
