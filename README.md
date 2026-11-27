@@ -30,6 +30,7 @@ The same things are available as commands, `/whorolled` (or `/wroll`):
 | `/whorolled attach` | toggle the counts on the roll buttons (and the hover lists) |
 | `/whorolled source auto\|api\|chat` | where roll data comes from (`auto`: the loot history API when the client has it) |
 | `/whorolled status` | diagnostic info (client build, API present, source in use, active rolls) |
+| `/whorolled inspect` | describe the game's roll frame and the roll frame template (fields, regions, children), in the chat and in `WhoRolledDB.inspect` — to adapt the addon to the client |
 | `/whorolled debug` | print each loot event in the chat |
 | `/whorolled clear` | erase the history |
 

@@ -700,7 +700,10 @@ end
 local function BuildFromTemplate(i)
   local name = "WhoRolledTestRoll" .. i
   local ok, f = pcall(CreateFrame, "Frame", name, UIParent, LOOT_TEMPLATE)
-  if not ok or type(f) ~= "table" then return nil end
+  if not ok or type(f) ~= "table" then
+    ns.Debug("test roll: " .. LOOT_TEMPLATE .. " unavailable:", tostring(f))
+    return nil
+  end
   f:Hide()
   -- parts are fields on Retail-style templates, "<name><suffix>" globals on Classic-style ones
   local function part(key, suffix)
@@ -743,6 +746,62 @@ local function BuildFromTemplate(i)
   f.buttons = { need, greed, pass }
   f.fromTemplate = true
   return f
+end
+
+-- /whorolled inspect: describes the game's roll frame and what the template gives, to adapt the
+-- addon to a client whose roll frames are built differently. Printed in the chat and saved in
+-- WhoRolledDB.inspect (WTF\Account\<account>\SavedVariables\WhoRolled.lua after a /reload).
+local function Describe(lines, frame, label, depth)
+  local function add(text) lines[#lines + 1] = string.rep("  ", depth) .. text end
+  local function info(o)
+    local kind = o.GetObjectType and o:GetObjectType() or "?"
+    local name = o.GetName and o:GetName()
+    local text = ""
+    if kind == "FontString" and o.GetText then text = " \"" .. tostring(o:GetText()) .. "\"" end
+    if kind == "Texture" and o.GetTexture then text = " " .. tostring(o:GetTexture()) end
+    return kind .. (name and (" " .. name) or "") .. text
+  end
+  local w, h = 0, 0
+  if frame.GetSize then w, h = frame:GetSize() end
+  add(label .. ": " .. info(frame) .. (" %dx%d"):format(w or 0, h or 0))
+  local keys = {}
+  for k, v in pairs(frame) do
+    if type(k) == "string" and type(v) == "table" and type(v.GetObjectType) == "function" then
+      keys[#keys + 1] = k
+    end
+  end
+  table.sort(keys)
+  for _, k in ipairs(keys) do add("  ." .. k .. " = " .. info(frame[k])) end
+  if frame.GetRegions then
+    for _, r in ipairs({ frame:GetRegions() }) do add("  region " .. info(r)) end
+  end
+  if frame.GetChildren and depth < 2 then
+    for _, c in ipairs({ frame:GetChildren() }) do Describe(lines, c, "child", depth + 1) end
+  end
+end
+
+function ns.Inspect()
+  local lines = {}
+  local _, build, _, iface = GetBuildInfo()
+  lines[1] = "build " .. tostring(build) .. " interface " .. tostring(iface)
+  local real = _G.GroupLootFrame1
+  if type(real) == "table" then
+    Describe(lines, real, "GroupLootFrame1", 0)
+  else
+    lines[#lines + 1] = "GroupLootFrame1: none"
+  end
+  lines[#lines + 1] = "GroupLootContainer: " .. (type(_G.GroupLootContainer) == "table" and "yes" or "none")
+  local ok, f = pcall(CreateFrame, "Frame", "WhoRolledInspectRoll", UIParent, LOOT_TEMPLATE)
+  if ok and type(f) == "table" then
+    f:Hide()
+    if f.UnregisterAllEvents then f:UnregisterAllEvents() end
+    Describe(lines, f, LOOT_TEMPLATE, 0)
+  else
+    lines[#lines + 1] = LOOT_TEMPLATE .. ": " .. tostring(f)
+  end
+  WhoRolledDB.inspect = lines
+  for _, line in ipairs(lines) do ns.Print(line) end
+  ns.Print(L.INSPECT_SAVED)
 end
 
 local function BuildLookalike()

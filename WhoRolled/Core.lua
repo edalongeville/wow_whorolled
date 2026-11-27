@@ -450,6 +450,8 @@ SlashCmdList.WHOROLLED = function(msg)
     else
       Print(L.SOURCE:format(s.source, RC:UseAPI() and "api" or "chat"))
     end
+  elseif cmd == "inspect" then
+    ns.Inspect()
   elseif cmd == "status" then
     local _, build, _, iface = GetBuildInfo()
     Print("build", build, "interface", iface)

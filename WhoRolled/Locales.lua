@@ -30,6 +30,7 @@ L.OPT_INTRO = "Shows who chose Need, Greed or Pass on each loot roll. Also in th
 L.OPT_DISPLAY = "Display"
 L.OPT_ATTACH = "Show the number of players on the Need / Greed / Pass buttons (names on hover)"
 L.NOBODY = "Nobody"
+L.INSPECT_SAVED = "Also saved in WhoRolled.lua (SavedVariables) after a /reload."
 L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Details"
 L.CLICK_HIDE = "|TInterface\\Buttons\\UI-MinusButton-Up:12|t Hide"
 L.ITEM_HEARTHSTONE = "Hearthstone"
@@ -70,6 +71,7 @@ L.HELP = {
   "/whorolled attach – toggle the counts on the roll buttons",
   "/whorolled source auto|api|chat – where roll data comes from",
   "/whorolled status – show diagnostic info",
+  "/whorolled inspect – describe the game's roll frame (to adapt the addon)",
   "/whorolled debug – toggle debug messages",
   "/whorolled clear – erase the history",
 }
@@ -96,6 +98,7 @@ if GetLocale() == "frFR" then
   L.OPT_DISPLAY = "Affichage"
   L.OPT_ATTACH = "Afficher le nombre de joueurs sur les boutons Besoin / Cupidité / Passer (noms au survol)"
   L.NOBODY = "Personne"
+  L.INSPECT_SAVED = "Aussi enregistré dans WhoRolled.lua (SavedVariables) après un /reload."
     L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Détails"
   L.CLICK_HIDE = "|TInterface\\Buttons\\UI-MinusButton-Up:12|t Masquer"
   L.ITEM_HEARTHSTONE = "Pierre de foyer"
@@ -136,6 +139,7 @@ if GetLocale() == "frFR" then
     "/whorolled attach – activer/désactiver les nombres sur les boutons des jets",
     "/whorolled source auto|api|chat – origine des données de jets",
     "/whorolled status – informations de diagnostic",
+    "/whorolled inspect – décrire le cadre de jet du jeu (pour adapter l'addon)",
     "/whorolled debug – activer/désactiver le débogage",
     "/whorolled clear – effacer l'historique",
   }

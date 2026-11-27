@@ -2,7 +2,7 @@
 ## Title: WhoRolled
 ## Notes: Shows who chose Need, Greed or Pass on each loot roll, with a roll history. /whorolled
 ## Notes-frFR: Affiche qui a choisi Besoin, Cupidité ou Passer sur chaque jet de butin, avec un historique. /whorolled
-## Version: 0.8.0
+## Version: 0.8.1
 ## Author: Garzak
 ## X-License: MIT
 ## IconTexture: Interface\Buttons\UI-GroupLoot-Dice-Up
