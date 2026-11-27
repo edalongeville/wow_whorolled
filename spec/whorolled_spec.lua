@@ -537,6 +537,14 @@ describe("bar under each roll", function()
     assert.are.equal(5, b.list.shownEntries)
   end)
 
+  it("leaves room for the bar between stacked test rolls", function()
+    env.SlashCmdList.WHOROLLED("test 2")
+    local y1 = select(5, ns.testFrames[1]:GetPoint(1))
+    local y2 = select(5, ns.testFrames[2]:GetPoint(1))
+    local _, h = ns.testFrames[1]:GetSize()
+    assert.is_true(y2 - y1 >= h + 22) -- frame + bar, no overlap
+  end)
+
   it("goes away when turned off", function()
     env.SlashCmdList.WHOROLLED("test")
     env.SlashCmdList.WHOROLLED("attach")

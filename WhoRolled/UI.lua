@@ -938,7 +938,10 @@ function ns.RunTest(count)
     local link = TestItemLink(item)
     local _, h = f:GetSize()
     f:ClearAllPoints()
-    f:SetPoint("BOTTOM", base, "BOTTOM", 0, baseY + (i - 1) * ((h or 64) + TEST_FRAME_GAP))
+    -- leave room for the bar under each roll
+    local barRoom = WhoRolledDB.settings.attach and (BAR_H + 2) or 0
+    local step = (h or 64) + barRoom + TEST_FRAME_GAP
+    f:SetPoint("BOTTOM", base, "BOTTOM", 0, baseY + barRoom + (i - 1) * step)
     f.link = link
     f.iconTex:SetTexture(TestItemIcon(item[1]))
     local color, name = link:match("^|c(%x+)|H.-|h%[(.-)%]|h")
