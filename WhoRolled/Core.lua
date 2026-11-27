@@ -8,6 +8,7 @@ local DEFAULTS = {
   maxHistory = 200,
   debug = false,
   attach = true,
+  resultTime = 10, -- seconds the bar shows the result
   source = "auto", -- "auto" | "api" | "chat"
 }
 
@@ -383,7 +384,12 @@ end
 function ns.SetAttach(v)
   WhoRolledDB.settings.attach = v and true or false
   Print(L.ATTACH:format(v and L.ON or L.OFF))
+  if not v then ns.HideAllBars() end
   ns.RefreshRollFrames()
+end
+
+function ns.SetResultTime(n)
+  WhoRolledDB.settings.resultTime = n
 end
 
 function ns.SetSource(v)

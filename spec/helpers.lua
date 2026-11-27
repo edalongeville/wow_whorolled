@@ -46,6 +46,9 @@ M.FrameMethods = {
   CreateFontString = function() return newFrame() end,
   CreateTexture = function() return newFrame() end,
   GetSize = function(self) return self._width or nil, self._height or nil end,
+  GetLeft = function() return 100 end,
+  GetTop = function() return 300 end,
+  GetWidth = function(self) return self._width or 240 end,
   ClearAllPoints = function(self) self._points = {} end,
   SetPoint = function(self, ...)
     self._points = self._points or {}

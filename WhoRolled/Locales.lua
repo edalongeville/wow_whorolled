@@ -20,7 +20,7 @@ L.DEBUG = "Debug messages: %s"
 L.ON = "on"
 L.OFF = "off"
 L.SOURCE = "Data source: %s (in use: %s)"
-L.ATTACH = "Counts on the roll buttons: %s"
+L.ATTACH = "Bar under the loot rolls: %s"
 L.MOVE_LABEL = "WhoRolled – loot rolls\nDrag me, then close (X) to lock"
 L.MOVE_UNLOCKED = "Drag the green box to place the loot rolls, then close it (X) to lock."
 L.MOVE_LOCKED = "Loot roll position locked."
@@ -28,7 +28,14 @@ L.MOVE_RESET = "Loot roll position reset: /reload to give them back to the game.
 L.OPT_INTRO = "Shows who chose Need, Greed or Pass on each loot roll. Also in the add-on menu by the minimap "
   .. "(left click: options, right click: history)."
 L.OPT_DISPLAY = "Display"
-L.OPT_ATTACH = "Show the number of players on the Need / Greed / Pass buttons (names on hover)"
+L.OPT_ATTACH = "Show a bar under each loot roll (click it to see who chose what)"
+L.OPT_RESULT_TIME = "Show the result for"
+L.CHOOSING_ONE = "1 player is choosing"
+L.CHOOSING = "%d players are choosing"
+L.WINS = "%s wins %s"
+L.WINS_NO_ROLL = "%s wins"
+L.ALL_PASSED_BAR = "Everyone passed"
+L.BAR_TOOLTIP = "Click to see who chose what"
 L.NOBODY = "Nobody"
 L.INSPECT_SAVED = "Also saved in WhoRolled.lua (SavedVariables) after a /reload."
 L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Details"
@@ -68,7 +75,7 @@ L.HELP = {
   "/whorolled move – move the loot roll frames",
   "/whorolled reset – give the loot roll position back to the game",
   "/whorolled test [1-10] – play fake rolls (one by default) to check the display",
-  "/whorolled attach – toggle the counts on the roll buttons",
+  "/whorolled attach – toggle the bar under the loot rolls",
   "/whorolled source auto|api|chat – where roll data comes from",
   "/whorolled status – show diagnostic info",
   "/whorolled inspect – describe the game's roll frame (to adapt the addon)",
@@ -88,7 +95,7 @@ if GetLocale() == "frFR" then
   L.ON = "activés"
   L.OFF = "désactivés"
   L.SOURCE = "Source des données : %s (utilisée : %s)"
-  L.ATTACH = "Nombres sur les boutons des jets : %s"
+  L.ATTACH = "Barre sous les jets de butin : %s"
   L.MOVE_LABEL = "WhoRolled – jets de butin\nDéplacez-moi, puis fermez (X) pour verrouiller"
   L.MOVE_UNLOCKED = "Déplacez le cadre vert pour placer les jets de butin, puis fermez-le (X) pour verrouiller."
   L.MOVE_LOCKED = "Position des jets de butin verrouillée."
@@ -96,7 +103,14 @@ if GetLocale() == "frFR" then
   L.OPT_INTRO = "Affiche qui a choisi Besoin, Cupidité ou Passer sur chaque jet de butin. Aussi dans le menu "
     .. "des add-ons près de la minicarte (clic gauche : options, clic droit : historique)."
   L.OPT_DISPLAY = "Affichage"
-  L.OPT_ATTACH = "Afficher le nombre de joueurs sur les boutons Besoin / Cupidité / Passer (noms au survol)"
+  L.OPT_ATTACH = "Afficher une barre sous chaque jet de butin (cliquer dessus pour voir qui a choisi quoi)"
+  L.OPT_RESULT_TIME = "Afficher le résultat pendant"
+  L.CHOOSING_ONE = "1 joueur choisit"
+  L.CHOOSING = "%d joueurs choisissent"
+  L.WINS = "%s gagne %s"
+  L.WINS_NO_ROLL = "%s gagne"
+  L.ALL_PASSED_BAR = "Tout le monde a passé"
+  L.BAR_TOOLTIP = "Cliquer pour voir qui a choisi quoi"
   L.NOBODY = "Personne"
   L.INSPECT_SAVED = "Aussi enregistré dans WhoRolled.lua (SavedVariables) après un /reload."
     L.CLICK_DETAILS = "|TInterface\\Buttons\\UI-PlusButton-Up:12|t Détails"
@@ -136,7 +150,7 @@ if GetLocale() == "frFR" then
     "/whorolled move – déplacer les jets de butin",
     "/whorolled reset – rendre la position des jets de butin au jeu",
     "/whorolled test [1-10] – simuler des jets (un par défaut) pour vérifier l'affichage",
-    "/whorolled attach – activer/désactiver les nombres sur les boutons des jets",
+    "/whorolled attach – activer/désactiver la barre sous les jets de butin",
     "/whorolled source auto|api|chat – origine des données de jets",
     "/whorolled status – informations de diagnostic",
     "/whorolled inspect – décrire le cadre de jet du jeu (pour adapter l'addon)",

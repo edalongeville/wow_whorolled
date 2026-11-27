@@ -77,6 +77,33 @@ local function Build()
     return b
   end
 
+  -- A slider from lo to hi by step, showing and saving settings[key] through set.
+  local function Slider(text, lo, hi, step, key, set, suffix)
+    Label(text, 16, y)
+    local slider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+    slider:SetPoint("TOPLEFT", panel, "TOPLEFT", 200, y - 2)
+    slider:SetWidth(200)
+    slider:SetMinMaxValues(lo, hi)
+    slider:SetValueStep(step)
+    if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
+    for _, part in ipairs({ "Low", "High", "Text" }) do
+      if type(slider[part]) == "table" and slider[part].SetText then slider[part]:SetText("") end
+    end
+    local value = Label("", 412, y)
+    suffix = suffix or ""
+    slider:SetScript("OnValueChanged", function(_, v)
+      v = math.floor(v / step + 0.5) * step
+      value:SetText(v .. suffix)
+      if not refreshing and v ~= WhoRolledDB.settings[key] then set(v) end
+    end)
+    controls[#controls + 1] = function(st)
+      slider:SetValue(st[key])
+      value:SetText(st[key] .. suffix)
+    end
+    y = y - 34
+    return slider
+  end
+
   local version = Version()
   Label("WhoRolled" .. (version and (" " .. version) or ""), 16, y, "GameFontNormalLarge")
   y = y - 26
@@ -87,7 +114,8 @@ local function Build()
   -- Display
   Header(L.OPT_DISPLAY)
   Checkbox(L.OPT_ATTACH, function(s) return s.attach end, ns.SetAttach)
-  y = y - 4
+  y = y - 6
+  Slider(L.OPT_RESULT_TIME, 1, 60, 1, "resultTime", ns.SetResultTime, " s")
   local moveButton
   moveButton = Button(L.OPT_MOVE, 16, 200, function()
     if ns.IsMoving() then
@@ -138,26 +166,7 @@ local function Build()
   end)
   y = y - 40
 
-  Label(L.OPT_MAX_HISTORY, 16, y)
-  local slider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
-  slider:SetPoint("TOPLEFT", panel, "TOPLEFT", 160, y - 2)
-  slider:SetWidth(220)
-  slider:SetMinMaxValues(50, 500)
-  slider:SetValueStep(50)
-  if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
-  for _, key in ipairs({ "Low", "High", "Text" }) do
-    if type(slider[key]) == "table" and slider[key].SetText then slider[key]:SetText("") end
-  end
-  local value = Label("", 392, y)
-  slider:SetScript("OnValueChanged", function(_, v)
-    v = math.floor(v / 50 + 0.5) * 50
-    value:SetText(v)
-    if not refreshing and v ~= WhoRolledDB.settings.maxHistory then ns.SetMaxHistory(v) end
-  end)
-  controls[#controls + 1] = function(s)
-    slider:SetValue(s.maxHistory)
-    value:SetText(s.maxHistory)
-  end
+  Slider(L.OPT_MAX_HISTORY, 50, 500, 50, "maxHistory", ns.SetMaxHistory)
   y = y - 34
 
   -- Data source: three checkboxes acting as radio buttons

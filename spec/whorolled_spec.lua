@@ -370,10 +370,17 @@ describe("options panel", function()
   it("trims the history from the slider", function()
     for i = 1, 120 do ns.RC:NewDrop("k" .. i, LINK) end
     ns.OpenOptions()
-    local slider = H.widgets("OptionsSliderTemplate")[1]
+    local slider = H.widgets("OptionsSliderTemplate")[2] -- 1: result time, 2: history
     slider:SetValue(52) -- snapped to 50
     assert.are.equal(50, env.WhoRolledDB.settings.maxHistory)
     assert.are.equal(50, #env.WhoRolledDB.history)
+  end)
+
+  it("sets how long the result stays", function()
+    ns.OpenOptions()
+    local slider = H.widgets("OptionsSliderTemplate")[1]
+    slider:SetValue(25.4)
+    assert.are.equal(25, env.WhoRolledDB.settings.resultTime)
   end)
 
   it("move button unlocks then locks the anchor", function()
@@ -404,179 +411,6 @@ describe("options panel", function()
   end)
 end)
 
-describe("roll panel", function()
-  local ns, env
-  before_each(function() ns, env = H.load() end)
-
-  local function panelFor(height, choosers, pending, winner)
-    local parent = env.CreateFrame("Frame", nil, env.UIParent)
-    parent:SetSize(240, height)
-    local p = ns.CreatePanel(parent)
-    local d = ns.RC:NewDrop("panel" .. height .. choosers .. math.random(1e6), LINK)
-    for i = 1, choosers do ns.RC:SetRoll(d, "P" .. i, "MAGE", i % 2 == 0 and "need" or "greed", i) end
-    for i = 1, pending or 0 do ns.RC:SetRoll(d, "W" .. i, "MAGE", "pending") end
-    if winner then
-      ns.RC:SetRoll(d, "P2", nil, nil, nil, true)
-      d.winner = "P2"
-    end
-    ns.FillPanel(p, d)
-    return p, d
-  end
-
-  local function click(p) p._scripts.OnClick(p) end
-
-  it("starts collapsed, as tall as its roll frame", function()
-    local p = panelFor(60, 5, 1)
-    assert.is_false(p.expanded)
-    local _, _, topRel = p:GetPoint(1)
-    local _, _, bottomRel = p:GetPoint(2)
-    assert.are.equal("TOPRIGHT", topRel)
-    assert.are.equal("BOTTOMRIGHT", bottomRel)
-    assert.are.equal(3, p.shownLines)
-  end)
-
-  it("sums up the choices when collapsed", function()
-    local p = panelFor(60, 5, 2)
-    local line1 = p.summary[1]:GetText()
-    assert.matches(ns.STATE_ICON.need .. " 2", line1, 1, true)
-    assert.matches(ns.STATE_ICON.greed .. " 3", line1, 1, true)
-    assert.matches("Détails", p.summary[3]:GetText(), 1, true)
-    assert.matches("En attente : 2", p.summary[2]:GetText(), 1, true)
-  end)
-
-  it("shows the winner when collapsed", function()
-    local p = panelFor(60, 3, 0, true)
-    assert.matches("P2", p.summary[2]:GetText(), 1, true)
-  end)
-
-  it("drops lines that do not fit a short roll frame", function()
-    local p = panelFor(30, 3, 1) -- room for 1 line
-    assert.are.equal(1, p.shownLines)
-  end)
-
-  it("expands on click to the full list, and collapses again", function()
-    local p = panelFor(60, 5, 1)
-    click(p)
-    assert.is_true(p.expanded)
-    assert.are.equal(7, p.shownEntries) -- hint + 5 players + pending line
-    assert.are.equal(1, #p._points) -- top only: grows past its roll frame
-    click(p)
-    assert.is_false(p.expanded)
-    assert.are.equal(2, #p._points)
-  end)
-
-  it("caps a long expanded list with +N", function()
-    local p = panelFor(60, 30, 5)
-    click(p)
-    assert.are.equal(25, p.shownEntries)
-    -- shown: hint + 23 players; hidden: 7 players + 5 pending
-    assert.matches("+12", p.rows[25].name:GetText(), 1, true)
-  end)
-
-  it("starts collapsed again for a new roll in the same frame", function()
-    local p = panelFor(60, 3)
-    click(p)
-    assert.is_true(p.expanded)
-    ns.FillPanel(p, p.drop) -- same roll updated: stays as the player left it
-    assert.is_true(p.expanded)
-    ns.FillPanel(p, ns.RC:NewDrop("other", LINK))
-    assert.is_false(p.expanded)
-  end)
-
-  it("runs test rolls with the panels", function()
-    env.SlashCmdList.WHOROLLED("test 2")
-    H.runTimers()
-    assert.are.equal(2, #env.WhoRolledDB.history)
-  end)
-end)
-
-describe("counts on the roll buttons", function()
-  local ns, env
-  before_each(function() ns, env = H.load() end)
-
-  local function badge(btn) return ns.badges[btn]:GetText() end
-
-  it("counts each choice on the test roll's buttons", function()
-    env.SlashCmdList.WHOROLLED("test")
-    H.runTimers() -- roll 1: Arwyn pass, Brogar pass, Célia need, Dorn greed
-    local f = ns.testFrames[1]
-    local need, greed, pass = f.buttons[1], f.buttons[2], f.buttons[3]
-    assert.are.equal("1", badge(need))
-    assert.are.equal("1", badge(greed))
-    assert.are.equal("2", badge(pass))
-    ns.TestChoose(f, "need")
-    assert.are.equal("2", badge(need))
-  end)
-
-  it("lists who made a choice while its button is hovered", function()
-    env.SlashCmdList.WHOROLLED("test")
-    H.runTimers()
-    local f = ns.testFrames[1]
-    local pass = f.buttons[3]
-    pass._scripts.OnEnter(pass)
-    local p
-    for _, c in ipairs(H.created) do
-      if c.kind == "Button" and c.frame._parent == f and c.frame.rows then p = c.frame end
-    end
-    assert.is_truthy(p)
-    assert.is_true(p:IsShown())
-    assert.are.equal(3, p.shownEntries) -- header + Arwyn + Brogar
-    assert.matches("Passer", p.rows[1].name:GetText(), 1, true)
-    pass._scripts.OnLeave(pass)
-    assert.is_false(p:IsShown())
-  end)
-
-  it("says nobody for a choice no one made", function()
-    env.SlashCmdList.WHOROLLED("test 3")
-    H.runTimers() -- roll 3: everyone passes
-    local f = ns.testFrames[3]
-    local need = f.buttons[1]
-    need._scripts.OnEnter(need)
-    assert.are.equal("", badge(need))
-  end)
-
-  it("puts counts on the game's roll frame buttons (Classic-style globals)", function()
-    local frame = env.CreateFrame("Frame", "GroupLootFrame1")
-    frame.rollID = 7
-    env.GroupLootFrame1RollButton = env.CreateFrame("Button", "GroupLootFrame1RollButton", frame)
-    env.GroupLootFrame1GreedButton = env.CreateFrame("Button", "GroupLootFrame1GreedButton", frame)
-    env.GroupLootFrame1PassButton = env.CreateFrame("Button", "GroupLootFrame1PassButton", frame)
-    frame.GetName = function() return "GroupLootFrame1" end
-    env.GetLootRollItemLink = function() return LINK end
-    H.fire("START_LOOT_ROLL", 7, 60)
-    env.WhoRolledDB.settings.source = "chat"
-    H.fire("CHAT_MSG_LOOT", "Zed a passé pour : " .. LINK)
-    H.fire("CHAT_MSG_LOOT", "Niwok a choisi Besoin pour : " .. LINK)
-    assert.are.equal("1", badge(env.GroupLootFrame1RollButton))
-    assert.are.equal("1", badge(env.GroupLootFrame1PassButton))
-    assert.are.equal("", badge(env.GroupLootFrame1GreedButton))
-  end)
-
-  it("falls back to the summary panel on a roll frame without known buttons", function()
-    local frame = env.CreateFrame("Frame", "GroupLootFrame1")
-    frame.rollID = 7
-    env.GetLootRollItemLink = function() return LINK end
-    H.fire("START_LOOT_ROLL", 7, 60)
-    env.WhoRolledDB.settings.source = "chat"
-    H.fire("CHAT_MSG_LOOT", "Zed a passé pour : " .. LINK)
-    local p
-    for _, c in ipairs(H.created) do
-      if c.frame._parent == frame and c.frame.summary then p = c.frame end
-    end
-    assert.is_truthy(p)
-    assert.is_true(p:IsShown())
-    assert.matches(ns.STATE_ICON.pass .. " 1", p.summary[1]:GetText(), 1, true)
-  end)
-
-  it("hides the counts when turned off", function()
-    env.SlashCmdList.WHOROLLED("test")
-    H.runTimers()
-    env.SlashCmdList.WHOROLLED("attach")
-    ns.OnDropChanged(ns.testFrames[1].drop)
-    assert.are.equal("", badge(ns.testFrames[1].buttons[3]))
-  end)
-end)
-
 describe("test rolls from the game's roll frame template", function()
   for _, style in ipairs({ "classic", "retail" }) do
     it("uses the template's own frame (" .. style .. " style) with its scripts off", function()
@@ -591,7 +425,7 @@ describe("test rolls from the game's roll frame template", function()
       assert.has_no.errors(function() need._scripts.OnClick(need) end) -- no real roll
       assert.are.equal("need", rollsByName(f.drop).Panda.state)
       assert.is_truthy(f.drop.winner)
-      assert.are.equal("2", ns.badges[need]:GetText()) -- Célia and you
+      assert.matches("gagne", ns.bars[f].text:GetText(), 1, true)
     end)
   end
 
@@ -610,5 +444,113 @@ describe("inspect", function()
     local text = table.concat(env.WhoRolledDB.inspect, "\n")
     assert.matches("GroupLootFrame1", text, 1, true)
     assert.matches("GroupLootFrameTemplate", text, 1, true)
+  end)
+end)
+
+describe("bar under each roll", function()
+  local ns, env
+  before_each(function() ns, env = H.load() end)
+
+  local function bar(i) return ns.bars[ns.testFrames[i or 1]] end
+
+  it("says how many players are choosing when the roll appears", function()
+    env.SlashCmdList.WHOROLLED("test")
+    assert.are.equal("5 joueurs choisissent", bar().text:GetText())
+    local _, rel, relPoint = bar():GetPoint(1)
+    assert.are.equal(ns.testFrames[1], rel)
+    assert.are.equal("BOTTOMLEFT", relPoint)
+  end)
+
+  it("uses the group size before any data arrived", function()
+    env.GetNumGroupMembers = function() return 3 end
+    local f = env.CreateFrame("Frame")
+    ns.UpdateRollFrame(f, nil)
+    assert.are.equal("3 joueurs choisissent", ns.bars[f].text:GetText())
+    env.GetNumGroupMembers = function() return 0 end
+    ns.UpdateRollFrame(f, nil)
+    assert.are.equal("1 joueur choisit", ns.bars[f].text:GetText())
+  end)
+
+  it("counts the choices with the roll icons", function()
+    env.SlashCmdList.WHOROLLED("test")
+    H.runTimers() -- roll 1: Arwyn pass, Brogar pass, Célia need, Dorn greed
+    local text = bar().text:GetText()
+    assert.matches(ns.STATE_ICON.need .. " 1", text, 1, true)
+    assert.matches(ns.STATE_ICON.greed .. " 1", text, 1, true)
+    assert.matches(ns.STATE_ICON.pass .. " 2", text, 1, true)
+  end)
+
+  it("shows the winner, their roll and their choice", function()
+    env.SlashCmdList.WHOROLLED("test")
+    H.runTimers()
+    ns.TestChoose(ns.testFrames[1], "pass")
+    local d = ns.testFrames[1].drop
+    local text = bar().text:GetText()
+    assert.matches("Célia", text, 1, true)
+    assert.matches("gagne " .. rollsByName(d)["Célia"].roll, text, 1, true)
+    assert.matches(ns.STATE_ICON.need, text, 1, true)
+  end)
+
+  it("says when everyone passed", function()
+    env.SlashCmdList.WHOROLLED("test 3")
+    H.runTimers()
+    ns.TestChoose(ns.testFrames[3], "pass")
+    assert.matches("Tout le monde a passé", bar(3).text:GetText(), 1, true)
+  end)
+
+  it("stays when the roll frame goes away, and hides after the result time", function()
+    env.WhoRolledDB.settings.resultTime = 7
+    env.SlashCmdList.WHOROLLED("test")
+    local f = ns.testFrames[1]
+    f:Hide()
+    f._scripts.OnHide(f) -- the game hides the roll frame when you choose
+    assert.is_true(bar():IsShown())
+    assert.are.equal(env.UIParent, select(2, bar():GetPoint(1))) -- detached, in place
+    H.timers = {}
+    ns.TestChoose(f, "pass") -- others have not chosen yet
+    for _, c in ipairs({ "Arwyn", "Brogar", "Célia", "Dorn" }) do ns.RC:SetRoll(f.drop, c, nil, "pass") end
+    ns.TestTimeout(f) -- result: everyone passed
+    local delays = {}
+    for _, t in ipairs(H.timers) do delays[t[1]] = true end
+    assert.is_true(delays[7])
+    H.runTimers()
+    assert.is_false(bar():IsShown())
+  end)
+
+  it("shows who chose what on click, and hides it on a second click", function()
+    env.SlashCmdList.WHOROLLED("test")
+    H.runTimers()
+    local b = bar()
+    b._scripts.OnClick(b)
+    assert.is_true(b.list:IsShown())
+    assert.are.equal(5, b.list.shownEntries) -- 4 players + you still choosing
+    b._scripts.OnClick(b)
+    assert.is_false(b.list:IsShown())
+  end)
+
+  it("keeps the detail list up to date while open", function()
+    env.SlashCmdList.WHOROLLED("test")
+    local b = bar()
+    b._scripts.OnClick(b)
+    assert.are.equal(1, b.list.shownEntries) -- everyone still choosing
+    H.runTimers()
+    assert.are.equal(5, b.list.shownEntries)
+  end)
+
+  it("goes away when turned off", function()
+    env.SlashCmdList.WHOROLLED("test")
+    env.SlashCmdList.WHOROLLED("attach")
+    assert.is_false(bar():IsShown())
+  end)
+
+  it("shows under the game's roll frames", function()
+    local frame = env.CreateFrame("Frame", "GroupLootFrame1")
+    frame.rollID = 7
+    env.GetLootRollItemLink = function() return LINK end
+    env.WhoRolledDB.settings.source = "chat"
+    H.fire("START_LOOT_ROLL", 7, 60)
+    ns.RefreshRollFrames()
+    H.fire("CHAT_MSG_LOOT", "Zed a passé pour : " .. LINK)
+    assert.matches(ns.STATE_ICON.pass .. " 1", ns.bars[frame].text:GetText(), 1, true)
   end)
 end)

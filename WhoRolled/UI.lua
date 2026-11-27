@@ -58,24 +58,23 @@ end
 local BACKDROP_TEMPLATE = BackdropTemplateMixin and "BackdropTemplate" or nil
 
 ---------------------------------------------------------------------------
--- Panel shown to the right of each Blizzard roll frame
+-- A bar under each roll frame (the game's frame itself is left as it is):
+--  1. the roll appears:      "5 joueurs choisissent"
+--  2. players choose:        <need> 2  <greed> 1  <pass> 1
+--  3. the roll is decided:   "Garzak gagne 87 <need>" (or "tout le monde a passé")
+--  4. it goes away a few seconds later (option "resultTime").
+-- The bar is not a child of the roll frame: when the game hides the roll frame (you chose, or
+-- the roll ended), the bar stays where it was until the result has been shown.
+-- A click on the bar shows, to its right, who chose what.
 ---------------------------------------------------------------------------
 local ROW_H = 14
 local PAD = 6
-local COLLAPSED_W = 124 -- icons and counts only
-local EXPANDED_W = 176 -- names, icon and roll
-local MAX_ROWS = 25 -- expanded list: past that, the rest is summed up as "+N"
-local panels = {}   -- [rollFrame] = panel
-local hooked = {}   -- [rollFrame] = true
-
--- The panel to the right of a roll frame. Normally it is only the list shown while a roll
--- button is hovered (see the counts on the buttons below). On a roll frame whose buttons are
--- not found, it is a summary instead, with two states:
---  collapsed: exactly as tall as its roll frame (stacked rolls never overlap), with the number
---             of players per choice, the winner or how many are still choosing, and a hint;
---  expanded:  the full list of players in one column, drawn above the other rolls.
--- A click switches between them.
-local FillPanel
+local LIST_W = 176
+local MAX_ROWS = 25     -- detail list: past that, the rest is summed up as "+N"
+local BAR_H = 20
+local SAFETY_HIDE = 120 -- a bar whose roll never gets a result goes away after this
+local bars = {}         -- [rollFrame] = bar, reused for each roll the frame shows
+local hooked = {}       -- [rollFrame] = true
 
 local function NewLine(p)
   local fs = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -83,50 +82,6 @@ local function NewLine(p)
   if fs.SetWordWrap then fs:SetWordWrap(false) end
   return fs
 end
-
-local function CreatePanel(parent)
-  local p = CreateFrame("Button", nil, parent, BACKDROP_TEMPLATE)
-  p:SetWidth(COLLAPSED_W)
-  ApplyBackdrop(p)
-  p:EnableMouse(true)
-  p:RegisterForClicks("LeftButtonUp")
-  p.expanded = WhoRolledDB.settings.expanded and true or false
-  p.rows = {}
-  p.summary = {}
-  for k = 1, 3 do
-    local fs = NewLine(p)
-    fs:SetPoint("TOPLEFT", p, "TOPLEFT", PAD + 2, -PAD - 1 - (k - 1) * ROW_H)
-    fs:SetWidth(COLLAPSED_W - 2 * PAD - 4)
-    p.summary[k] = fs
-  end
-  p:SetScript("OnClick", function(self)
-    self.expanded = not self.expanded
-    FillPanel(self, self.drop)
-  end)
-  return p
-end
-
-local function GetRow(p, i)
-  local row = p.rows[i]
-  if not row then
-    row = {}
-    row.name = NewLine(p)
-    row.name:SetWidth(EXPANDED_W - 2 * PAD - 52)
-    row.choice = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.choice:SetJustifyH("RIGHT")
-    p.rows[i] = row
-  end
-  return row
-end
-
--- Lines that fit in the roll frame's height (at least 1).
-local function LinesThatFit(p)
-  local parent = p:GetParent()
-  local h = parent and parent.GetHeight and parent:GetHeight()
-  if type(h) ~= "number" or h <= 0 then h = 60 end
-  return math.max(1, math.floor((h - 2 * PAD) / ROW_H))
-end
-ns.LinesThatFit = LinesThatFit
 
 local function ChoiceIcon(s)
   return STATE_ICON[s] or (STATE_COLOR[s] .. STATE_LABEL[s] .. "|r")
@@ -138,85 +93,39 @@ local function ChoiceText(r)
   return txt
 end
 
-local function Collapsed(p, d)
-  local parent = p:GetParent()
-  p:ClearAllPoints()
-  p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
-  p:SetPoint("BOTTOMLEFT", parent, "BOTTOMRIGHT", 2, 0)
-  if p.SetFrameStrata and parent.GetFrameStrata then p:SetFrameStrata(parent:GetFrameStrata() or "MEDIUM") end
-  p:SetWidth(COLLAPSED_W)
-  for _, row in ipairs(p.rows) do row.name:Hide(); row.choice:Hide() end
-
-  -- line 1: players per choice; line 2: winner, else who is still choosing; line 3: hint
-  local counts, winner = {}, nil
-  for _, r in ipairs(d and d.rolls or {}) do
-    local s = r.state or "pending"
-    counts[s] = (counts[s] or 0) + 1
-    if r.winner then winner = r end
-  end
-  local parts = {}
-  for _, s in ipairs(STATE_SEQ) do
-    if s ~= "pending" and counts[s] then
-      parts[#parts + 1] = ChoiceIcon(s) .. " " .. counts[s]
-    end
-  end
-  local line1 = #parts > 0 and table.concat(parts, "  ") or ("|cff888888" .. L.WAITING_CHOICES .. "|r")
-  local line2
-  if winner then
-    line2 = WIN_ICON .. " " .. Colored(winner.name, winner.class) .. (winner.roll and (" " .. winner.roll) or "")
-  elseif d and d.allPassed then
-    line2 = "|cff9d9d9d" .. L.ALL_PASSED .. "|r"
-  elseif counts.pending then
-    line2 = "|cff888888" .. L.PENDING .. " : " .. counts.pending .. "|r"
-  end
-  local lines = { line1, line2, "|cff888888" .. L.CLICK_DETAILS .. "|r" }
-  if not line2 then lines = { line1, lines[3] } end
-
-  local fit = LinesThatFit(p)
-  for k = 1, 3 do
-    local fs = p.summary[k]
-    if lines[k] and k <= fit then
-      fs:SetText(lines[k])
-      fs:Show()
-    else
-      fs:Hide()
-    end
-  end
-  p.shownLines = math.min(#lines, fit) -- for the tests
+local function GroupSize()
+  local n = GetNumGroupMembers()
+  return (type(n) == "number" and n > 0) and n or 1
 end
 
--- filter: a choice ("need", "greed", ...) to list only the players who made it (hover on a roll
--- button), or nil for everyone (click on the summary panel).
-local function Expanded(p, d, filter)
-  local parent = p:GetParent()
-  p:ClearAllPoints()
-  p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
-  if p.SetFrameStrata then p:SetFrameStrata("DIALOG") end -- above the other rolls
-  p:SetWidth(EXPANDED_W)
-  for _, fs in ipairs(p.summary) do fs:Hide() end
-
-  local header
-  if filter then
-    header = ChoiceIcon(filter) .. " " .. STATE_COLOR[filter] .. STATE_LABEL[filter] .. "|r"
-  else
-    header = "|cff888888" .. L.CLICK_HIDE .. "|r"
+-- The detail list: everyone, winner first, then by choice and roll.
+local function GetRow(p, i)
+  local row = p.rows[i]
+  if not row then
+    row = {}
+    row.name = NewLine(p)
+    row.name:SetWidth(LIST_W - 2 * PAD - 52)
+    row.choice = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.choice:SetJustifyH("RIGHT")
+    p.rows[i] = row
   end
-  local entries = { { header, "", 0 } }
+  return row
+end
+
+local function FillList(p, d)
+  local entries = {}
   local pending = 0
   for _, r in ipairs(d and SortedRolls(d) or {}) do
-    local s = r.state or "pending"
-    if s == "pending" then
+    if (r.state or "pending") == "pending" then
       pending = pending + 1
-    elseif not filter or s == filter then
+    else
       entries[#entries + 1] = { (r.winner and (WIN_ICON .. " ") or "") .. Colored(r.name, r.class), ChoiceText(r), 1 }
     end
   end
-  if filter then
-    if #entries == 1 then entries[2] = { "|cff888888" .. L.NOBODY .. "|r", "", 0 } end
-  elseif pending > 0 then
+  if pending > 0 then
     entries[#entries + 1] = { "|cff888888" .. L.PENDING .. " : " .. pending .. "|r", "", pending }
-  elseif #entries == 1 then
-    entries[2] = { "|cff888888" .. L.WAITING_CHOICES .. "|r", "", 0 }
+  elseif #entries == 0 then
+    entries[1] = { "|cff888888" .. L.WAITING_CHOICES .. "|r", "", 0 }
   end
   if #entries > MAX_ROWS then
     local hidden = 0
@@ -226,10 +135,9 @@ local function Expanded(p, d, filter)
     end
     entries[MAX_ROWS] = { "|cff888888+" .. hidden .. "|r", "", hidden }
   end
-
-  for i, e in ipairs(entries) do
-    local row = GetRow(p, i)
-    local y = -PAD - 1 - (i - 1) * ROW_H
+  for k, e in ipairs(entries) do
+    local row = GetRow(p, k)
+    local y = -PAD - 1 - (k - 1) * ROW_H
     row.name:ClearAllPoints()
     row.name:SetPoint("TOPLEFT", p, "TOPLEFT", PAD + 2, y)
     row.choice:ClearAllPoints()
@@ -239,136 +147,185 @@ local function Expanded(p, d, filter)
     row.name:Show()
     row.choice:Show()
   end
-  for i = #entries + 1, #p.rows do
-    p.rows[i].name:Hide()
-    p.rows[i].choice:Hide()
+  for k = #entries + 1, #p.rows do
+    p.rows[k].name:Hide()
+    p.rows[k].choice:Hide()
   end
   p:SetHeight(2 * PAD + 2 + #entries * ROW_H)
   p.shownEntries = #entries -- for the tests
 end
 
-FillPanel = function(p, d)
-  if d ~= p.drop then p.expanded = false end -- a new roll in a reused roll frame starts collapsed
-  p.drop = d
-  p:EnableMouse(true)
-  if p.expanded then Expanded(p, d) else Collapsed(p, d) end
-  p:Show()
-end
-ns.CreatePanel, ns.FillPanel = CreatePanel, FillPanel -- for the tests
-
----------------------------------------------------------------------------
--- Counts on the roll frame's own Need / Greed / Pass buttons; hovering a button
--- shows who made that choice in a list to the right of the roll frame. When the
--- buttons cannot be found (an unknown roll frame), the summary panel is used.
----------------------------------------------------------------------------
--- Keys of the buttons on the game's roll frames: fields on Retail-style frames, global
--- "<frame name><key>" on Classic-style ones (where Need is "RollButton").
-local BUTTON_KEYS = {
-  need = { "NeedButton", "RollButton" },
-  greed = { "GreedButton" },
-  pass = { "PassButton" },
-  transmog = { "TransmogButton" },
-}
-local buttonCache = {} -- [rollFrame] = { [state] = button } or false
-local badges = {}      -- [button] = count font string
-local hoverHooked = {} -- [button] = true
-local hovered = {}     -- [rollFrame] = state under the mouse
-local frameDrop = {}   -- [rollFrame] = drop shown
-
-local function FindRollButtons(f)
-  if f.whoRolledButtons then return f.whoRolledButtons end -- our test frames
-  if buttonCache[f] ~= nil then return buttonCache[f] or nil end
-  local name = f.GetName and f:GetName()
-  local found, any = {}, false
-  for state, keys in pairs(BUTTON_KEYS) do
-    for _, key in ipairs(keys) do
-      local b = f[key]
-      if type(b) ~= "table" and name then b = _G[name .. key] end
-      if type(b) == "table" and b.HookScript then
-        found[state] = b
-        any = true
-        break
-      end
-    end
-  end
-  buttonCache[f] = any and found or false
-  return any and found or nil
-end
-
-local function ShowHoverList(f)
-  local p = panels[f] or CreatePanel(f)
-  panels[f] = p
-  p.drop = frameDrop[f]
-  p:EnableMouse(false) -- a list to read, nothing to click
-  Expanded(p, frameDrop[f], hovered[f])
-  p:Show()
-end
-
-local function HookButton(f, state, b)
-  if hoverHooked[b] then return end
-  b:HookScript("OnEnter", function()
-    hovered[f] = state
-    if frameDrop[f] and WhoRolledDB.settings.attach then ShowHoverList(f) end
-  end)
-  b:HookScript("OnLeave", function()
-    hovered[f] = nil
-    if panels[f] and FindRollButtons(f) then panels[f]:Hide() end
-  end)
-  hoverHooked[b] = true
-end
-
-function ns.UpdateRollFrame(f, d)
-  local buttons = FindRollButtons(f)
-  local on = WhoRolledDB.settings.attach and d ~= nil
-  if not buttons then
-    if on then
-      panels[f] = panels[f] or CreatePanel(f)
-      FillPanel(panels[f], d)
-    elseif panels[f] then
-      panels[f]:Hide()
-    end
-    return
-  end
-
-  frameDrop[f] = d
-  local counts = {}
+-- What the bar says, by phase.
+local function BarText(d)
+  local counts, winner, chosen = {}, nil, false
   for _, r in ipairs(d and d.rolls or {}) do
     local s = r.state or "pending"
     counts[s] = (counts[s] or 0) + 1
+    if s ~= "pending" then chosen = true end
+    if r.winner then winner = r end
   end
-  for state, b in pairs(buttons) do
-    local fs = badges[b]
-    if not fs then
-      fs = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-      fs:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 4, -2)
-      badges[b] = fs
+  if d and d.winner then
+    local name, class, roll, state = d.winner, nil, nil, nil
+    if winner then class, roll, state = winner.class, winner.roll, winner.state end
+    local text = roll and L.WINS:format(Colored(name, class), roll) or L.WINS_NO_ROLL:format(Colored(name, class))
+    return WIN_ICON .. " " .. text .. (state and STATE_ICON[state] and (" " .. STATE_ICON[state]) or "")
+  end
+  if d and d.allPassed then
+    return "|cff9d9d9d" .. L.ALL_PASSED_BAR .. "|r"
+  end
+  if chosen then
+    local parts = {}
+    for _, s in ipairs({ "need", "transmog", "greed", "pass" }) do
+      if s ~= "transmog" or counts[s] then
+        parts[#parts + 1] = ChoiceIcon(s) .. " " .. (counts[s] or 0)
+      end
     end
-    HookButton(f, state, b)
-    local n = on and counts[state] or 0
-    fs:SetText(n > 0 and tostring(n) or "")
+    return table.concat(parts, "    ")
   end
-  if on and hovered[f] then
-    ShowHoverList(f)
-  elseif panels[f] then
-    panels[f]:Hide()
+  local n = counts.pending or GroupSize()
+  return n == 1 and L.CHOOSING_ONE or L.CHOOSING:format(n)
+end
+ns.BarText = BarText -- for the tests
+
+local function CreateBar()
+  local b = CreateFrame("Button", nil, UIParent, BACKDROP_TEMPLATE)
+  b:SetHeight(BAR_H)
+  ApplyBackdrop(b)
+  b:RegisterForClicks("LeftButtonUp")
+  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  b.text:SetPoint("LEFT", b, "LEFT", PAD, 0)
+  b.text:SetPoint("RIGHT", b, "RIGHT", -PAD, 0)
+  b.text:SetJustifyH("CENTER")
+  if b.text.SetWordWrap then b.text:SetWordWrap(false) end
+
+  local list = CreateFrame("Frame", nil, b, BACKDROP_TEMPLATE)
+  list:SetWidth(LIST_W)
+  list:SetPoint("BOTTOMLEFT", b, "BOTTOMRIGHT", 2, 0)
+  list:SetFrameStrata("DIALOG")
+  ApplyBackdrop(list)
+  list.rows = {}
+  list:Hide()
+  b.list = list
+
+  b:SetScript("OnClick", function(self)
+    if self.list:IsShown() then
+      self.list:Hide()
+    else
+      FillList(self.list, self.drop)
+      self.list:Show()
+    end
+  end)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText(L.BAR_TOOLTIP)
+    GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  b:Hide()
+  return b
+end
+
+local function HideBar(bar)
+  bar:Hide()
+  bar.list:Hide()
+end
+
+-- Hide the bar after delay seconds, unless it has moved on to another roll by then.
+local function ScheduleHide(bar, delay)
+  bar.hideToken = (bar.hideToken or 0) + 1
+  local token, d = bar.hideToken, bar.drop
+  C_Timer.After(delay, function()
+    if bar.hideToken == token and bar.drop == d then HideBar(bar) end
+  end)
+end
+
+local function Finished(d)
+  return d ~= nil and (d.winner ~= nil or d.allPassed == true)
+end
+
+local function UpdateBar(bar)
+  local d = bar.drop
+  bar.text:SetText(BarText(d))
+  bar:Show()
+  if bar.list:IsShown() then FillList(bar.list, d) end
+  if Finished(d) and not bar.finished then
+    bar.finished = true
+    ScheduleHide(bar, WhoRolledDB.settings.resultTime)
   end
 end
-ns.badges = badges -- for the tests
+
+local function Attach(bar, f)
+  bar:ClearAllPoints()
+  bar:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, -2)
+  bar:SetPoint("TOPRIGHT", f, "BOTTOMRIGHT", 0, -2)
+  bar.attached = f
+end
+
+-- The roll frame went away: the bar stays where it is, on its own.
+local function Detach(bar)
+  local left, top, width = bar:GetLeft(), bar:GetTop(), bar:GetWidth()
+  if left and top then
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    if width then bar:SetWidth(width) end
+  end
+  bar.attached = nil
+end
+
+local function OnRollFrameHidden(f)
+  local bar = bars[f]
+  if not bar or not bar:IsShown() then return end
+  Detach(bar)
+  if not Finished(bar.drop) then ScheduleHide(bar, SAFETY_HIDE) end
+end
+
+-- f shows the roll d (nil while no data has arrived for it).
+function ns.UpdateRollFrame(f, d)
+  if not hooked[f] then
+    f:HookScript("OnHide", function() OnRollFrameHidden(f) end)
+    hooked[f] = true
+  end
+  local bar = bars[f]
+  if not WhoRolledDB.settings.attach then
+    if bar then HideBar(bar) end
+    return
+  end
+  if not bar then
+    bar = CreateBar()
+    bars[f] = bar
+  end
+  if bar.drop ~= d or not bar:IsShown() then
+    -- a new roll in this frame: start over
+    bar.drop, bar.finished = d, nil
+    bar.hideToken = (bar.hideToken or 0) + 1
+    bar.list:Hide()
+  end
+  if f:IsShown() then Attach(bar, f) end
+  UpdateBar(bar)
+end
+ns.bars = bars -- for the tests
+
+function ns.HideAllBars()
+  for _, bar in pairs(bars) do HideBar(bar) end
+end
+
+-- A roll changed: update the bars showing it, even when their roll frame is gone.
+function ns.UpdateBarsFor(d)
+  for _, bar in pairs(bars) do
+    if bar.drop == d and bar:IsShown() then UpdateBar(bar) end
+  end
+end
 
 function ns.RefreshRollFrames()
   ns.ApplyRollPosition()
   for i = 1, (NUM_GROUP_LOOT_FRAMES or 4) do
     local f = _G["GroupLootFrame" .. i]
     if f then
-      if not hooked[f] then
+      if not hooked["show" .. i] then
         f:HookScript("OnShow", ns.RefreshRollFramesSoon)
-        hooked[f] = true
+        hooked["show" .. i] = true
       end
-      if f:IsShown() and f.rollID then
-        ns.UpdateRollFrame(f, RC:DropForRoll(f.rollID))
-      elseif panels[f] then
-        panels[f]:Hide()
-      end
+      if f:IsShown() and f.rollID then ns.UpdateRollFrame(f, RC:DropForRoll(f.rollID)) end
     end
   end
 end
@@ -588,6 +545,7 @@ local testFrames = {} -- pool of fake roll frames, each with .drop
 
 function ns.OnDropChanged(d)
   ns.RefreshRollFrames()
+  ns.UpdateBarsFor(d)
   if d.test then
     for _, f in ipairs(testFrames) do
       if f.drop == d and f:IsShown() then ns.UpdateRollFrame(f, d) end
@@ -874,9 +832,6 @@ local function GetTestFrame(i)
     if left <= 0 then ns.TestTimeout(self) end
   end)
 
-  -- the same counts and hover lists as on the game's roll frames
-  f.whoRolledButtons = {}
-  for _, btn in ipairs(f.buttons) do f.whoRolledButtons[btn.choice] = btn end
   testFrames[i] = f
   return f
 end
