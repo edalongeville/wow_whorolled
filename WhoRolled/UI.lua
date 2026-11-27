@@ -9,6 +9,13 @@ local STATE_COLOR = {
 }
 local STATE_SEQ = { "need", "transmog", "greed", "pass", "pending" }
 local WIN_ICON = "|TInterface\\RaidFrame\\ReadyCheck-Ready:12|t"
+-- The game's own roll button icons (no icon for transmog: its colored label is used)
+local STATE_ICON = {
+  need = "|TInterface\\Buttons\\UI-GroupLoot-Dice-Up:14:14|t",
+  greed = "|TInterface\\Buttons\\UI-GroupLoot-Coin-Up:14:14|t",
+  pass = "|TInterface\\Buttons\\UI-GroupLoot-Pass-Up:14:14|t",
+}
+ns.STATE_ICON = STATE_ICON
 
 local function Colored(name, class)
   local colors = CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS
@@ -55,7 +62,8 @@ local BACKDROP_TEMPLATE = BackdropTemplateMixin and "BackdropTemplate" or nil
 ---------------------------------------------------------------------------
 local ROW_H = 14
 local PAD = 6
-local PANEL_W = 240
+local COLLAPSED_W = 124 -- icons and counts only
+local EXPANDED_W = 176 -- names, icon and roll
 local MAX_ROWS = 25 -- expanded list: past that, the rest is summed up as "+N"
 local panels = {}   -- [rollFrame] = panel
 local hooked = {}   -- [rollFrame] = true
@@ -76,7 +84,7 @@ end
 
 local function CreatePanel(parent)
   local p = CreateFrame("Button", nil, parent, BACKDROP_TEMPLATE)
-  p:SetWidth(PANEL_W)
+  p:SetWidth(COLLAPSED_W)
   ApplyBackdrop(p)
   p:EnableMouse(true)
   p:RegisterForClicks("LeftButtonUp")
@@ -86,7 +94,7 @@ local function CreatePanel(parent)
   for k = 1, 3 do
     local fs = NewLine(p)
     fs:SetPoint("TOPLEFT", p, "TOPLEFT", PAD + 2, -PAD - 1 - (k - 1) * ROW_H)
-    fs:SetWidth(PANEL_W - 2 * PAD - 4)
+    fs:SetWidth(COLLAPSED_W - 2 * PAD - 4)
     p.summary[k] = fs
   end
   p:SetScript("OnClick", function(self)
@@ -101,7 +109,7 @@ local function GetRow(p, i)
   if not row then
     row = {}
     row.name = NewLine(p)
-    row.name:SetWidth(PANEL_W - 90)
+    row.name:SetWidth(EXPANDED_W - 2 * PAD - 52)
     row.choice = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.choice:SetJustifyH("RIGHT")
     p.rows[i] = row
@@ -118,10 +126,13 @@ local function LinesThatFit(p)
 end
 ns.LinesThatFit = LinesThatFit
 
+local function ChoiceIcon(s)
+  return STATE_ICON[s] or (STATE_COLOR[s] .. STATE_LABEL[s] .. "|r")
+end
+
 local function ChoiceText(r)
-  local s = r.state or "pending"
-  local txt = STATE_COLOR[s] .. STATE_LABEL[s] .. "|r"
-  if r.roll then txt = txt .. "  |cffffffff" .. r.roll .. "|r" end
+  local txt = ChoiceIcon(r.state or "pending")
+  if r.roll then txt = txt .. " |cffffffff" .. r.roll .. "|r" end
   return txt
 end
 
@@ -131,6 +142,7 @@ local function Collapsed(p, d)
   p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
   p:SetPoint("BOTTOMLEFT", parent, "BOTTOMRIGHT", 2, 0)
   if p.SetFrameStrata and parent.GetFrameStrata then p:SetFrameStrata(parent:GetFrameStrata() or "MEDIUM") end
+  p:SetWidth(COLLAPSED_W)
   for _, row in ipairs(p.rows) do row.name:Hide(); row.choice:Hide() end
 
   -- line 1: players per choice; line 2: winner, else who is still choosing; line 3: hint
@@ -143,13 +155,13 @@ local function Collapsed(p, d)
   local parts = {}
   for _, s in ipairs(STATE_SEQ) do
     if s ~= "pending" and counts[s] then
-      parts[#parts + 1] = STATE_COLOR[s] .. STATE_LABEL[s] .. " " .. counts[s] .. "|r"
+      parts[#parts + 1] = ChoiceIcon(s) .. " " .. counts[s]
     end
   end
   local line1 = #parts > 0 and table.concat(parts, "  ") or ("|cff888888" .. L.WAITING_CHOICES .. "|r")
   local line2
   if winner then
-    line2 = WIN_ICON .. " " .. Colored(winner.name, winner.class) .. "  " .. ChoiceText(winner)
+    line2 = WIN_ICON .. " " .. Colored(winner.name, winner.class) .. (winner.roll and (" " .. winner.roll) or "")
   elseif d and d.allPassed then
     line2 = "|cff9d9d9d" .. L.ALL_PASSED .. "|r"
   elseif counts.pending then
@@ -176,6 +188,7 @@ local function Expanded(p, d)
   p:ClearAllPoints()
   p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
   if p.SetFrameStrata then p:SetFrameStrata("DIALOG") end -- above the other rolls
+  p:SetWidth(EXPANDED_W)
   for _, fs in ipairs(p.summary) do fs:Hide() end
 
   local entries = { { "|cff888888" .. L.CLICK_HIDE .. "|r", "", 0 } }
@@ -478,17 +491,18 @@ end
 -- Test mode: fake roll frames that fill up over a few seconds
 ---------------------------------------------------------------------------
 ns.MAX_TEST_ROLLS = 10
+-- { item ID, name used when the client has not cached the item yet, quality colour }
 local TEST_ITEMS = {
-  { 6948, "Hearthstone", "ffffffff" },
-  { 4306, "Silk Cloth", "ffffffff" },
-  { 2589, "Linen Cloth", "ffffffff" },
-  { 765, "Silverleaf", "ffffffff" },
-  { 2770, "Copper Ore", "ffffffff" },
-  { 118, "Minor Healing Potion", "ffffffff" },
-  { 2447, "Peacebloom", "ffffffff" },
-  { 4338, "Mageweave Cloth", "ffffffff" },
-  { 159, "Refreshing Spring Water", "ffffffff" },
-  { 117, "Tough Jerky", "ffffffff" },
+  { 6948, L.ITEM_HEARTHSTONE, "ffffffff" },
+  { 4306, L.ITEM_SILK, "ffffffff" },
+  { 2589, L.ITEM_LINEN, "ffffffff" },
+  { 765, L.ITEM_SILVERLEAF, "ffffffff" },
+  { 2770, L.ITEM_COPPER_ORE, "ffffffff" },
+  { 118, L.ITEM_MINOR_HEALING, "ffffffff" },
+  { 2447, L.ITEM_PEACEBLOOM, "ffffffff" },
+  { 4338, L.ITEM_MAGEWEAVE, "ffffffff" },
+  { 159, L.ITEM_SPRING_WATER, "ffffffff" },
+  { 117, L.ITEM_TOUGH_JERKY, "ffffffff" },
 }
 local TEST_FRAME_GAP = 4
 local TEST_DURATION = 15 -- seconds to choose, like a real roll's timer
