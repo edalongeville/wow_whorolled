@@ -3,7 +3,7 @@
 local M = {}
 
 local function newFrame(name)
-  local f = { _scripts = {}, _events = {}, _shown = true, _name = name }
+  local f = { _scripts = {}, _events = {}, _shown = true, _name = name, _points = false, _setPointHooks = false }
   return setmetatable(f, {
     __index = function(_, k)
       local m = M.FrameMethods[k]
@@ -26,6 +26,16 @@ M.FrameMethods = {
   SetText = function(self, t) self._text = t end,
   GetText = function(self) return self._text end,
   CreateFontString = function() return newFrame() end,
+  ClearAllPoints = function(self) self._points = {} end,
+  SetPoint = function(self, ...)
+    self._points = self._points or {}
+    table.insert(self._points, { ... })
+    for _, fn in ipairs(self._setPointHooks or {}) do fn(self, ...) end
+  end,
+  GetPoint = function(self, i)
+    local p = self._points and self._points[i or 1]
+    if p then return p[1], p[2], p[3], p[4], p[5] end
+  end,
   AddMessage = function(self, msg) self._lines = self._lines or {}; table.insert(self._lines, msg) end,
   Clear = function(self) self._lines = {} end,
   -- fields, not methods: absent on our stub frames
@@ -51,9 +61,16 @@ function M.load(opts)
     CreateFrame = function(_, name)
       local f = newFrame(name)
       f._shown = name ~= "WhoRolledHistoryFrame"
+      if name then M.env[name] = f end -- named frames are globals, as in the game
       return f
     end,
     UIParent = newFrame("UIParent"),
+    GroupLootContainer = (not opts.noContainer) and newFrame("GroupLootContainer") or nil,
+    hooksecurefunc = function(frame, method, fn)
+      assert(method == "SetPoint", "only SetPoint hooks are stubbed")
+      frame._setPointHooks = frame._setPointHooks or {}
+      table.insert(frame._setPointHooks, fn)
+    end,
     GameTooltip = newFrame("GameTooltip"),
     UISpecialFrames = {},
     C_Timer = { After = function(sec, fn) table.insert(M.timers, { sec, fn }) end },

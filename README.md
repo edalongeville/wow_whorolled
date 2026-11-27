@@ -9,6 +9,7 @@ The addon is still being tested.
 - A panel to the right of each loot roll frame: every player in their class colour with their choice (Besoin / Cupidité / Passer, or Need / Greed / Pass on an English client), their roll once it is known, a check mark on the winner, and how many players have not chosen yet
 - A history window (`/whorolled`): one line per item with its winner and boss, then the choices grouped by type. Hover an item for its tooltip, shift-click to link it in chat. Movable, resizable, closes with Escape; keeps the last 200 items
 - Roll data comes from the client's loot history (`C_LootHistory`). If that turns out to be empty, `/whorolled source chat` reads the loot chat messages instead, matched against the client's own localized strings (works on French and English clients)
+- The loot roll frames can be moved anywhere with `/whorolled move`, and stay there
 - `/whorolled test` plays a fake roll to check the display without a dungeon
 
 ## Commands
@@ -19,6 +20,8 @@ The addon is still being tested.
 |---|---|
 | `/whorolled` | show or hide the history |
 | `/whorolled test` | play a fake roll |
+| `/whorolled move` | show a green anchor to drag the loot roll frames (and their panels) anywhere; again to lock. The position is saved |
+| `/whorolled reset` | give the loot roll position back to the game (after a `/reload`) |
 | `/whorolled attach` | toggle the panels next to roll frames |
 | `/whorolled source auto\|api\|chat` | where roll data comes from (`auto`: the loot history API when the client has it) |
 | `/whorolled status` | diagnostic info (client build, API present, source in use, active rolls) |

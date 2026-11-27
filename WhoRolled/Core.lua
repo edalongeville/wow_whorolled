@@ -316,6 +316,7 @@ local function OnEvent(self, event, ...)
   elseif event == "PLAYER_LOGIN" then
     BuildStateMap()
     BuildChatPatterns()
+    if ns.ApplyRollPosition then ns.ApplyRollPosition() end
     self:RegisterEvent("START_LOOT_ROLL")
     self:RegisterEvent("CANCEL_LOOT_ROLL")
     self:RegisterEvent("CHAT_MSG_LOOT")
@@ -386,6 +387,10 @@ SlashCmdList.WHOROLLED = function(msg)
   elseif cmd == "debug" then
     s.debug = not s.debug
     Print(L.DEBUG:format(s.debug and L.ON or L.OFF))
+  elseif cmd == "move" then
+    ns.ToggleMove()
+  elseif cmd == "reset" then
+    ns.ResetRollPosition()
   elseif cmd == "attach" then
     s.attach = not s.attach
     Print(L.ATTACH:format(s.attach and L.ON or L.OFF))

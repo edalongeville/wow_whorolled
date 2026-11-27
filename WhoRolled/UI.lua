@@ -119,6 +119,7 @@ local function FillPanel(p, d)
 end
 
 function ns.RefreshRollFrames()
+  ns.ApplyRollPosition()
   for i = 1, (NUM_GROUP_LOOT_FRAMES or 4) do
     local f = _G["GroupLootFrame" .. i]
     if f then
@@ -138,6 +139,93 @@ end
 
 function ns.RefreshRollFramesSoon()
   C_Timer.After(0, ns.RefreshRollFrames)
+end
+
+---------------------------------------------------------------------------
+-- Moving the roll frames: a draggable anchor (/whorolled move). The game's
+-- loot roll container (or the first roll frame on clients without one) is
+-- pinned to it, and the panels follow because they hang off the roll frames.
+---------------------------------------------------------------------------
+local anchor
+local pinning = false
+
+local function RollRoot()
+  return _G.GroupLootContainer or _G.GroupLootFrame1
+end
+
+local function CreateAnchor()
+  anchor = CreateFrame("Frame", "WhoRolledRollAnchor", UIParent, BACKDROP_TEMPLATE)
+  anchor:SetSize(260, 40)
+  anchor:SetFrameStrata("DIALOG")
+  anchor:SetMovable(true)
+  anchor:SetClampedToScreen(true)
+  anchor:EnableMouse(true)
+  anchor:RegisterForDrag("LeftButton")
+  ApplyBackdrop(anchor)
+  if anchor.SetBackdropColor then anchor:SetBackdropColor(0.1, 0.4, 0.1, 0.8) end
+  anchor.text = anchor:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  anchor.text:SetPoint("CENTER")
+  anchor.text:SetText(L.MOVE_LABEL)
+  anchor:SetScript("OnDragStart", anchor.StartMoving)
+  anchor:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local point, _, relPoint, x, y = self:GetPoint(1)
+    WhoRolledDB.settings.rollPos = { point, relPoint, x, y }
+    ns.ApplyRollPosition()
+  end)
+  anchor:Hide()
+end
+
+local function PlaceAnchor()
+  if not anchor then CreateAnchor() end
+  anchor:ClearAllPoints()
+  local pos = WhoRolledDB.settings.rollPos
+  if pos then
+    anchor:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4])
+  else
+    anchor:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 200)
+  end
+end
+
+local function Pin(frame)
+  if pinning then return end
+  pinning = true
+  frame:ClearAllPoints()
+  frame:SetPoint("BOTTOM", anchor, "BOTTOM", 0, 0)
+  pinning = false
+end
+
+local hookedRoot
+function ns.ApplyRollPosition()
+  if not WhoRolledDB.settings.rollPos then return end
+  PlaceAnchor()
+  local root = RollRoot()
+  if not root then return end
+  if hookedRoot ~= root and hooksecurefunc then
+    -- the game re-positions the container; put it back on our anchor each time
+    hooksecurefunc(root, "SetPoint", function(frame)
+      if WhoRolledDB.settings.rollPos and not pinning then Pin(frame) end
+    end)
+    hookedRoot = root
+  end
+  Pin(root)
+end
+
+function ns.ToggleMove()
+  PlaceAnchor()
+  if anchor:IsShown() then
+    anchor:Hide()
+    ns.Print(L.MOVE_LOCKED)
+  else
+    anchor:Show()
+    ns.Print(L.MOVE_UNLOCKED)
+  end
+end
+
+function ns.ResetRollPosition()
+  WhoRolledDB.settings.rollPos = nil
+  if anchor then anchor:Hide() end
+  ns.Print(L.MOVE_RESET)
 end
 
 ---------------------------------------------------------------------------
@@ -283,11 +371,18 @@ function ns.RunTest()
   if not testFrame then
     testFrame = CreateFrame("Frame", nil, UIParent, BACKDROP_TEMPLATE)
     testFrame:SetSize(240, 60)
-    testFrame:SetPoint("CENTER", 0, 180)
     ApplyBackdrop(testFrame)
     testFrame.text = testFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     testFrame.text:SetPoint("CENTER")
     testPanel = CreatePanel(testFrame)
+  end
+  -- show the test roll where real rolls will appear
+  testFrame:ClearAllPoints()
+  if WhoRolledDB.settings.rollPos then
+    PlaceAnchor()
+    testFrame:SetPoint("BOTTOM", anchor, "BOTTOM", 0, 0)
+  else
+    testFrame:SetPoint("CENTER", 0, 180)
   end
   testFrame.text:SetText("TEST  " .. link)
   testFrame:Show()

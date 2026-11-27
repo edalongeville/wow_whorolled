@@ -31,6 +31,7 @@ read_globals = {
   "GetNumGroupMembers",
   "GetTime",
   "GREED",
+  "hooksecurefunc",
   "IsInRaid",
   "NEED",
   "NUM_GROUP_LOOT_FRAMES",
