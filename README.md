@@ -6,7 +6,7 @@ The addon is still being tested.
 
 ## Features
 
-- A panel to the right of each loot roll frame: every player in their class colour with their choice (Besoin / Cupidité / Passer, or Need / Greed / Pass on an English client), their roll once it is known, a check mark on the winner, and how many players have not chosen yet
+- A panel to the right of each loot roll frame, as tall as the roll frame: how many players chose Need, Greed or Pass, the winner (or how many have not chosen yet). Click it for the full list: every player in their class colour with their choice (Besoin / Cupidité / Passer, or Need / Greed / Pass on an English client) and their roll; click again to collapse. An option shows the full list by default
 - A history window (`/whorolled history`): one line per item with its winner and boss, then the choices grouped by type. Hover an item for its tooltip, shift-click to link it in chat. Movable, resizable, closes with Escape; keeps the last 200 items
 - Roll data comes from the client's loot history (`C_LootHistory`). If that turns out to be empty, `/whorolled source chat` reads the loot chat messages instead, matched against the client's own localized strings (works on French and English clients)
 - The loot roll frames can be moved anywhere with `/whorolled move`, and stay there

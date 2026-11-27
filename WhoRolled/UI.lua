@@ -54,21 +54,45 @@ local BACKDROP_TEMPLATE = BackdropTemplateMixin and "BackdropTemplate" or nil
 -- Panel shown to the right of each Blizzard roll frame
 ---------------------------------------------------------------------------
 local ROW_H = 14
-local COL_W = 190
 local PAD = 6
-local MAX_COLS = 2
+local PANEL_W = 240
+local MAX_ROWS = 25 -- expanded list: past that, the rest is summed up as "+N"
 local panels = {}   -- [rollFrame] = panel
 local hooked = {}   -- [rollFrame] = true
 
--- The panel is exactly as tall as its roll frame, so stacked rolls never overlap: when the list
--- does not fit in one column it uses a second one, and past that the rest is summed up as "+N".
+-- A panel has two states:
+--  collapsed: exactly as tall as its roll frame (stacked rolls never overlap), with the number
+--             of players per choice, the winner or how many are still choosing, and a hint;
+--  expanded:  the full list of players in one column, drawn above the other rolls.
+-- A click switches between them.
+local FillPanel
+
+local function NewLine(p)
+  local fs = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  fs:SetJustifyH("LEFT")
+  if fs.SetWordWrap then fs:SetWordWrap(false) end
+  return fs
+end
+
 local function CreatePanel(parent)
-  local p = CreateFrame("Frame", nil, parent, BACKDROP_TEMPLATE)
-  p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
-  p:SetPoint("BOTTOMLEFT", parent, "BOTTOMRIGHT", 2, 0)
-  p:SetWidth(COL_W + 2 * PAD)
+  local p = CreateFrame("Button", nil, parent, BACKDROP_TEMPLATE)
+  p:SetWidth(PANEL_W)
   ApplyBackdrop(p)
+  p:EnableMouse(true)
+  p:RegisterForClicks("LeftButtonUp")
+  p.expanded = WhoRolledDB.settings.expanded and true or false
   p.rows = {}
+  p.summary = {}
+  for k = 1, 3 do
+    local fs = NewLine(p)
+    fs:SetPoint("TOPLEFT", p, "TOPLEFT", PAD + 2, -PAD - 1 - (k - 1) * ROW_H)
+    fs:SetWidth(PANEL_W - 2 * PAD - 4)
+    p.summary[k] = fs
+  end
+  p:SetScript("OnClick", function(self)
+    self.expanded = not self.expanded
+    FillPanel(self, self.drop)
+  end)
   return p
 end
 
@@ -76,10 +100,8 @@ local function GetRow(p, i)
   local row = p.rows[i]
   if not row then
     row = {}
-    row.name = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.name:SetWidth(COL_W - 72)
-    row.name:SetJustifyH("LEFT")
-    if row.name.SetWordWrap then row.name:SetWordWrap(false) end
+    row.name = NewLine(p)
+    row.name:SetWidth(PANEL_W - 90)
     row.choice = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.choice:SetJustifyH("RIGHT")
     p.rows[i] = row
@@ -87,58 +109,105 @@ local function GetRow(p, i)
   return row
 end
 
--- Rows per column that fit in the roll frame's height (at least 1).
-local function RowsPerColumn(p)
+-- Lines that fit in the roll frame's height (at least 1).
+local function LinesThatFit(p)
   local parent = p:GetParent()
   local h = parent and parent.GetHeight and parent:GetHeight()
   if type(h) ~= "number" or h <= 0 then h = 60 end
   return math.max(1, math.floor((h - 2 * PAD) / ROW_H))
 end
-ns.RowsPerColumn = RowsPerColumn
+ns.LinesThatFit = LinesThatFit
 
-local function FillPanel(p, d)
-  -- entries: { name text, choice text, number of players it stands for }
-  local entries, pending = {}, 0
-  if d then
-    for _, r in ipairs(SortedRolls(d)) do
-      local s = r.state or "pending"
-      if s == "pending" then
-        pending = pending + 1
-      else
-        local txt = STATE_COLOR[s] .. STATE_LABEL[s] .. "|r"
-        if r.roll then txt = txt .. "  |cffffffff" .. r.roll .. "|r" end
-        entries[#entries + 1] = { (r.winner and (WIN_ICON .. " ") or "") .. Colored(r.name, r.class), txt, 1 }
-      end
+local function ChoiceText(r)
+  local s = r.state or "pending"
+  local txt = STATE_COLOR[s] .. STATE_LABEL[s] .. "|r"
+  if r.roll then txt = txt .. "  |cffffffff" .. r.roll .. "|r" end
+  return txt
+end
+
+local function Collapsed(p, d)
+  local parent = p:GetParent()
+  p:ClearAllPoints()
+  p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
+  p:SetPoint("BOTTOMLEFT", parent, "BOTTOMRIGHT", 2, 0)
+  if p.SetFrameStrata and parent.GetFrameStrata then p:SetFrameStrata(parent:GetFrameStrata() or "MEDIUM") end
+  for _, row in ipairs(p.rows) do row.name:Hide(); row.choice:Hide() end
+
+  -- line 1: players per choice; line 2: winner, else who is still choosing; line 3: hint
+  local counts, winner = {}, nil
+  for _, r in ipairs(d and d.rolls or {}) do
+    local s = r.state or "pending"
+    counts[s] = (counts[s] or 0) + 1
+    if r.winner then winner = r end
+  end
+  local parts = {}
+  for _, s in ipairs(STATE_SEQ) do
+    if s ~= "pending" and counts[s] then
+      parts[#parts + 1] = STATE_COLOR[s] .. STATE_LABEL[s] .. " " .. counts[s] .. "|r"
+    end
+  end
+  local line1 = #parts > 0 and table.concat(parts, "  ") or ("|cff888888" .. L.WAITING_CHOICES .. "|r")
+  local line2
+  if winner then
+    line2 = WIN_ICON .. " " .. Colored(winner.name, winner.class) .. "  " .. ChoiceText(winner)
+  elseif d and d.allPassed then
+    line2 = "|cff9d9d9d" .. L.ALL_PASSED .. "|r"
+  elseif counts.pending then
+    line2 = "|cff888888" .. L.PENDING .. " : " .. counts.pending .. "|r"
+  end
+  local lines = { line1, line2, "|cff888888" .. L.CLICK_DETAILS .. "|r" }
+  if not line2 then lines = { line1, lines[3] } end
+
+  local fit = LinesThatFit(p)
+  for k = 1, 3 do
+    local fs = p.summary[k]
+    if lines[k] and k <= fit then
+      fs:SetText(lines[k])
+      fs:Show()
+    else
+      fs:Hide()
+    end
+  end
+  p.shownLines = math.min(#lines, fit) -- for the tests
+end
+
+local function Expanded(p, d)
+  local parent = p:GetParent()
+  p:ClearAllPoints()
+  p:SetPoint("TOPLEFT", parent, "TOPRIGHT", 2, 0)
+  if p.SetFrameStrata then p:SetFrameStrata("DIALOG") end -- above the other rolls
+  for _, fs in ipairs(p.summary) do fs:Hide() end
+
+  local entries = { { "|cff888888" .. L.CLICK_HIDE .. "|r", "", 0 } }
+  local pending = 0
+  for _, r in ipairs(d and SortedRolls(d) or {}) do
+    if (r.state or "pending") == "pending" then
+      pending = pending + 1
+    else
+      entries[#entries + 1] = { (r.winner and (WIN_ICON .. " ") or "") .. Colored(r.name, r.class), ChoiceText(r), 1 }
     end
   end
   if pending > 0 then
     entries[#entries + 1] = { "|cff888888" .. L.PENDING .. " : " .. pending .. "|r", "", pending }
-  elseif #entries == 0 then
-    entries[1] = { "|cff888888" .. L.WAITING_CHOICES .. "|r", "", 0 }
+  elseif #entries == 1 then
+    entries[2] = { "|cff888888" .. L.WAITING_CHOICES .. "|r", "", 0 }
   end
-
-  local perCol = RowsPerColumn(p)
-  local capacity = perCol * MAX_COLS
-  if #entries > capacity then
-    -- keep the first ones (winner and choices first, by sort order) and count the players left
+  if #entries > MAX_ROWS then
     local hidden = 0
-    for k = #entries, capacity, -1 do
+    for k = #entries, MAX_ROWS, -1 do
       hidden = hidden + entries[k][3]
       entries[k] = nil
     end
-    entries[capacity] = { "|cff888888+" .. hidden .. "|r", "", hidden }
+    entries[MAX_ROWS] = { "|cff888888+" .. hidden .. "|r", "", hidden }
   end
 
-  local cols = #entries > perCol and 2 or 1
   for i, e in ipairs(entries) do
     local row = GetRow(p, i)
-    local col = math.floor((i - 1) / perCol)
-    local line = (i - 1) % perCol
-    local x, y = PAD + 2 + col * COL_W, -PAD - 1 - line * ROW_H
+    local y = -PAD - 1 - (i - 1) * ROW_H
     row.name:ClearAllPoints()
-    row.name:SetPoint("TOPLEFT", p, "TOPLEFT", x, y)
+    row.name:SetPoint("TOPLEFT", p, "TOPLEFT", PAD + 2, y)
     row.choice:ClearAllPoints()
-    row.choice:SetPoint("TOPRIGHT", p, "TOPLEFT", x + COL_W - 8, y)
+    row.choice:SetPoint("TOPRIGHT", p, "TOPRIGHT", -PAD - 2, y)
     row.name:SetText(e[1])
     row.choice:SetText(e[2])
     row.name:Show()
@@ -148,8 +217,17 @@ local function FillPanel(p, d)
     p.rows[i].name:Hide()
     p.rows[i].choice:Hide()
   end
-  p:SetWidth(cols * COL_W + 2 * PAD)
-  p.shownEntries, p.shownCols = #entries, cols -- for the tests
+  p:SetHeight(2 * PAD + 2 + #entries * ROW_H)
+  p.shownEntries = #entries -- for the tests
+end
+
+FillPanel = function(p, d)
+  if d ~= p.drop then
+    -- a new roll in a reused roll frame starts in the default state
+    p.expanded = WhoRolledDB.settings.expanded and true or false
+  end
+  p.drop = d
+  if p.expanded then Expanded(p, d) else Collapsed(p, d) end
   p:Show()
 end
 ns.CreatePanel, ns.FillPanel = CreatePanel, FillPanel -- for the tests

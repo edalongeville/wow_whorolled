@@ -8,6 +8,7 @@ local DEFAULTS = {
   maxHistory = 200,
   debug = false,
   attach = true,
+  expanded = false, -- panels start with the full list instead of the summary
   source = "auto", -- "auto" | "api" | "chat"
 }
 
@@ -384,6 +385,10 @@ function ns.SetAttach(v)
   WhoRolledDB.settings.attach = v and true or false
   Print(L.ATTACH:format(v and L.ON or L.OFF))
   ns.RefreshRollFrames()
+end
+
+function ns.SetExpanded(v)
+  WhoRolledDB.settings.expanded = v and true or false
 end
 
 function ns.SetSource(v)

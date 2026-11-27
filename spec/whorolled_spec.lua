@@ -287,7 +287,7 @@ describe("options panel", function()
   local ns, env
   before_each(function() ns, env = H.load() end)
 
-  -- checkboxes in creation order: attach, auto, api, chat, debug
+  -- checkboxes in creation order: attach, expanded, auto, api, chat, debug
   local function boxes() return H.widgets("UICheckButtonTemplate") end
   local function click(cb, checked)
     cb:SetChecked(checked)
@@ -316,10 +316,11 @@ describe("options panel", function()
     env.WhoRolledDB.settings.source = "chat"
     ns.OpenOptions()
     local b = boxes()
-    assert.are.equal(5, #b)
+    assert.are.equal(6, #b)
     assert.is_false(b[1]:GetChecked())
     assert.is_false(b[2]:GetChecked())
-    assert.is_true(b[4]:GetChecked())
+    assert.is_false(b[3]:GetChecked())
+    assert.is_true(b[5]:GetChecked())
   end)
 
   it("changes settings from the checkboxes", function()
@@ -327,10 +328,12 @@ describe("options panel", function()
     local b = boxes()
     click(b[1], false)
     assert.is_false(env.WhoRolledDB.settings.attach)
-    click(b[3], true)
+    click(b[2], true)
+    assert.is_true(env.WhoRolledDB.settings.expanded)
+    click(b[4], true)
     assert.are.equal("api", env.WhoRolledDB.settings.source)
-    assert.is_false(b[2]:GetChecked()) -- radio behaviour
-    click(b[5], true)
+    assert.is_false(b[3]:GetChecked()) -- radio behaviour
+    click(b[6], true)
     assert.is_true(env.WhoRolledDB.settings.debug)
   end)
 
@@ -371,51 +374,86 @@ describe("options panel", function()
   end)
 end)
 
-describe("roll panel layout", function()
+describe("roll panel", function()
   local ns, env
   before_each(function() ns, env = H.load() end)
 
-  local function panelFor(height, choosers, pending)
+  local function panelFor(height, choosers, pending, winner)
     local parent = env.CreateFrame("Frame", nil, env.UIParent)
     parent:SetSize(240, height)
     local p = ns.CreatePanel(parent)
-    local d = ns.RC:NewDrop("layout" .. height .. choosers, LINK)
-    for i = 1, choosers do ns.RC:SetRoll(d, "P" .. i, "MAGE", "greed", i) end
+    local d = ns.RC:NewDrop("panel" .. height .. choosers .. math.random(1e6), LINK)
+    for i = 1, choosers do ns.RC:SetRoll(d, "P" .. i, "MAGE", i % 2 == 0 and "need" or "greed", i) end
     for i = 1, pending or 0 do ns.RC:SetRoll(d, "W" .. i, "MAGE", "pending") end
+    if winner then
+      ns.RC:SetRoll(d, "P2", nil, nil, nil, true)
+      d.winner = "P2"
+    end
     ns.FillPanel(p, d)
-    return p
+    return p, d
   end
 
-  it("is anchored to the full height of its roll frame", function()
-    local p = panelFor(60, 1)
-    local top, _, topRel = p:GetPoint(1)
-    local bottom, _, bottomRel = p:GetPoint(2)
-    assert.are.equal("TOPLEFT", top)
+  local function click(p) p._scripts.OnClick(p) end
+
+  it("starts collapsed, as tall as its roll frame", function()
+    local p = panelFor(60, 5, 1)
+    assert.is_false(p.expanded)
+    local _, _, topRel = p:GetPoint(1)
+    local _, _, bottomRel = p:GetPoint(2)
     assert.are.equal("TOPRIGHT", topRel)
-    assert.are.equal("BOTTOMLEFT", bottom)
     assert.are.equal("BOTTOMRIGHT", bottomRel)
+    assert.are.equal(3, p.shownLines)
   end)
 
-  it("uses one column when the list fits", function()
-    local p = panelFor(84, 4) -- 5 rows fit in 84 px
-    assert.are.equal(5, ns.RowsPerColumn(p))
-    assert.are.equal(1, p.shownCols)
-    assert.are.equal(4, p.shownEntries)
+  it("sums up the choices when collapsed", function()
+    local p = panelFor(60, 5, 2)
+    local line1 = p.summary[1]:GetText()
+    assert.matches("Besoin 2", line1, 1, true)
+    assert.matches("Cupidité 3", line1, 1, true)
+    assert.matches("En attente : 2", p.summary[2]:GetText(), 1, true)
   end)
 
-  it("uses a second column for a 5-man group on a 60 px frame", function()
-    local p = panelFor(60, 5) -- 3 rows fit
-    assert.are.equal(2, p.shownCols)
-    assert.are.equal(5, p.shownEntries)
+  it("shows the winner when collapsed", function()
+    local p = panelFor(60, 3, 0, true)
+    assert.matches("P2", p.summary[2]:GetText(), 1, true)
   end)
 
-  it("sums up what does not fit as +N", function()
-    local p = panelFor(60, 10, 5) -- 10 choices + 5 pending, room for 6 lines
-    assert.are.equal(6, p.shownEntries)
-    assert.matches("+10", p.rows[6].name:GetText(), 1, true) -- 5 hidden choices + 5 pending
+  it("drops lines that do not fit a short roll frame", function()
+    local p = panelFor(30, 3, 1) -- room for 1 line
+    assert.are.equal(1, p.shownLines)
   end)
 
-  it("runs test rolls with the new layout", function()
+  it("expands on click to the full list, and collapses again", function()
+    local p = panelFor(60, 5, 1)
+    click(p)
+    assert.is_true(p.expanded)
+    assert.are.equal(7, p.shownEntries) -- hint + 5 players + pending line
+    assert.are.equal(1, #p._points) -- top only: grows past its roll frame
+    click(p)
+    assert.is_false(p.expanded)
+    assert.are.equal(2, #p._points)
+  end)
+
+  it("caps a long expanded list with +N", function()
+    local p = panelFor(60, 30, 5)
+    click(p)
+    assert.are.equal(25, p.shownEntries)
+    -- shown: hint + 23 players; hidden: 7 players + 5 pending
+    assert.matches("+12", p.rows[25].name:GetText(), 1, true)
+  end)
+
+  it("follows the 'expanded by default' setting, per new roll", function()
+    env.WhoRolledDB.settings.expanded = true
+    local p, d = panelFor(60, 3)
+    assert.is_true(p.expanded)
+    click(p)
+    ns.FillPanel(p, d) -- same roll updated: stays as the player left it
+    assert.is_false(p.expanded)
+    ns.FillPanel(p, ns.RC:NewDrop("other", LINK)) -- next roll: default again
+    assert.is_true(p.expanded)
+  end)
+
+  it("runs test rolls with the panels", function()
     env.SlashCmdList.WHOROLLED("test 2")
     H.runTimers()
     assert.are.equal(2, #env.WhoRolledDB.history)
